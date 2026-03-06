@@ -1,42 +1,30 @@
 [
   {
-    "content": "Phase 3A: Rename app to 'Yash Ornaments WayFinder' across all UI",
+    "content": "Fix BLOCKER: DB_NAME hardcoded fallback to 'test_database'",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Add watermark system (Pillow-based image watermarking, diagonal repeating text)",
+    "content": "Fix BLOCKER: N+1 query in admin_live_sessions",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Media upload pipeline with automatic watermarking",
+    "content": "Fix BLOCKER: N+1 query in admin_get_qr_sources",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Navigation screen branding 'Navigation powered by YASH ORNAMENTS'",
+    "content": "Fix BLOCKER: N+1 query in helpdesk_get_cases",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Media access protection (no right-click, hotlink blocking)",
+    "content": "Fix BLOCKER: N+1 query in helpdesk_get_callbacks",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Admin Branding Settings page (watermark config)",
+    "content": "Fix BLOCKER: N+1 query in admin_analytics (drop-offs)",
     "status": "completed"
   },
   {
-    "content": "Phase 3A: Admin Media Management page (uploaded media list, preview, status)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3A: QR Code Generation tab in admin (AJPL/Yash, scannable QR)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3A: Customer QR landing - blurred map background + name/phone form",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3A: End to End Testing",
-    "status": "completed"
+    "content": "Re-run deployment health check",
+    "status": "in_progress"
   }
 ]

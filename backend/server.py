@@ -43,7 +43,7 @@ for d in [ORIGINALS_DIR, WATERMARKED_DIR, QR_DIR]:
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'test_database')]
+db = client[os.environ['DB_NAME']]
 
 # LLM Key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
@@ -413,14 +413,17 @@ async def admin_get_sessions(status: str = "active", business_id: str = None, li
 async def admin_live_sessions():
     """Get all active sessions for live map view."""
     sessions = await db.sessions.find({'status': 'active'}, {'_id': 0}).to_list(200)
+    
+    # Batch fetch checkpoints to avoid N+1
+    cp_ids = list(set(s.get('current_checkpoint_id', '') for s in sessions if s.get('current_checkpoint_id')))
+    cp_lookup = {}
+    if cp_ids:
+        cps = await db.checkpoints.find({'id': {'$in': cp_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(cp_ids))
+        cp_lookup = {cp['id']: cp['name'] for cp in cps}
+    
     result = []
     for s in sessions:
-        # Get checkpoint info
-        cp_name = ""
-        if s.get('current_checkpoint_id'):
-            cp = await db.checkpoints.find_one({'id': s['current_checkpoint_id']})
-            cp_name = cp['name'] if cp else ''
-        
+        cp_name = cp_lookup.get(s.get('current_checkpoint_id', ''), '')
         result.append({
             **serialize_doc(s),
             'current_checkpoint_name': cp_name
@@ -702,10 +705,17 @@ async def admin_delete_gallery_item(item_id: str):
 @api_router.get("/admin/qr-sources")
 async def admin_get_qr_sources():
     sources = await db.qr_sources.find({}, {'_id': 0}).to_list(100)
+    
+    # Batch fetch businesses to avoid N+1
+    biz_ids = list(set(s.get('business_id', '') for s in sources if s.get('business_id')))
+    biz_lookup = {}
+    if biz_ids:
+        bizs = await db.businesses.find({'id': {'$in': biz_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(biz_ids))
+        biz_lookup = {b['id']: b['name'] for b in bizs}
+    
     result = []
     for s in sources:
-        biz = await db.businesses.find_one({'id': s['business_id']})
-        result.append({**serialize_doc(s), 'business_name': biz['name'] if biz else 'Unknown'})
+        result.append({**serialize_doc(s), 'business_name': biz_lookup.get(s.get('business_id', ''), 'Unknown')})
     return result
 
 @api_router.post("/admin/qr-sources")
@@ -759,19 +769,26 @@ async def admin_analytics(business_id: str = None, days: int = 30):
     async for doc in db.session_events.aggregate(pipeline):
         event_counts[doc['_id']] = doc['count']
     
-    # Top drop-off checkpoints
+    # Top drop-off checkpoints (with $lookup to avoid N+1)
     drop_off_pipeline = [
         {'$match': {**event_query, 'event_type': 'cannot_find'}},
         {'$group': {'_id': '$checkpoint_id', 'count': {'$sum': 1}}},
         {'$sort': {'count': -1}},
-        {'$limit': 5}
+        {'$limit': 5},
+        {'$lookup': {
+            'from': 'checkpoints',
+            'localField': '_id',
+            'foreignField': 'id',
+            'as': 'checkpoint'
+        }},
+        {'$unwind': {'path': '$checkpoint', 'preserveNullAndEmptyArrays': True}}
     ]
     drop_offs = []
     async for doc in db.session_events.aggregate(drop_off_pipeline):
-        cp = await db.checkpoints.find_one({'id': doc['_id']})
+        cp = doc.get('checkpoint', {})
         drop_offs.append({
             'checkpoint_id': doc['_id'],
-            'checkpoint_name': cp['name'] if cp else 'Unknown',
+            'checkpoint_name': cp.get('name', 'Unknown'),
             'count': doc['count']
         })
     
@@ -807,16 +824,30 @@ async def helpdesk_get_cases(status: str = None, business_id: str = None):
         query['business_id'] = business_id
     cases = await db.helpdesk_cases.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
     
+    # Batch fetch businesses and sessions to avoid N+1
+    biz_ids = list(set(c.get('business_id', '') for c in cases if c.get('business_id')))
+    session_ids = list(set(c.get('session_id', '') for c in cases if c.get('session_id')))
+    
+    biz_lookup = {}
+    if biz_ids:
+        bizs = await db.businesses.find({'id': {'$in': biz_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'slug': 1}).to_list(len(biz_ids))
+        biz_lookup = {b['id']: b for b in bizs}
+    
+    session_lookup = {}
+    if session_ids:
+        sessions = await db.sessions.find({'id': {'$in': session_ids}}, {'_id': 0, 'id': 1, 'status': 1}).to_list(len(session_ids))
+        session_lookup = {s['id']: s for s in sessions}
+    
     result = []
     for case in cases:
-        biz = await db.businesses.find_one({'id': case['business_id']})
-        session = await db.sessions.find_one({'id': case['session_id']})
+        biz = biz_lookup.get(case.get('business_id', ''), {})
+        sess = session_lookup.get(case.get('session_id', ''), {})
         result.append({
             **serialize_doc(case),
-            'business_name': biz['name'] if biz else 'Unknown',
-            'business_slug': biz['slug'] if biz else '',
+            'business_name': biz.get('name', 'Unknown'),
+            'business_slug': biz.get('slug', ''),
             'route_name': '',
-            'session_status': session['status'] if session else 'unknown'
+            'session_status': sess.get('status', 'unknown')
         })
     return result
 
@@ -878,12 +909,19 @@ async def helpdesk_get_callbacks(status: str = None):
     if status:
         query['status'] = status
     callbacks = await db.callback_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    # Batch fetch businesses to avoid N+1
+    biz_ids = list(set(cb.get('business_id', '') for cb in callbacks if cb.get('business_id')))
+    biz_lookup = {}
+    if biz_ids:
+        bizs = await db.businesses.find({'id': {'$in': biz_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(biz_ids))
+        biz_lookup = {b['id']: b['name'] for b in bizs}
+    
     result = []
     for cb in callbacks:
-        biz = await db.businesses.find_one({'id': cb['business_id']})
         result.append({
             **serialize_doc(cb),
-            'business_name': biz['name'] if biz else 'Unknown'
+            'business_name': biz_lookup.get(cb.get('business_id', ''), 'Unknown')
         })
     return result
 
