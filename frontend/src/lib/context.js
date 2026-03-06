@@ -8,6 +8,11 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // Set document title
+  useEffect(() => {
+    document.title = 'Yash Ornaments WayFinder';
+  }, []);
+
   // Set business theme on html element
   useEffect(() => {
     if (business?.slug) {
