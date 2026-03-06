@@ -9,27 +9,27 @@
   },
   {
     "content": "Phase 2: Design guidelines + Environment setup",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - Data models, seed data, all API endpoints",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Frontend - Customer navigation UI (mobile-first)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Frontend - Admin dashboard + Helpdesk dashboard",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: All user stories covered in Development and testing",
-    "status": "pending"
+    "status": "in_progress"
   },
   {
     "content": "Phase 2: End to End Testing using Testing Agent",
-    "status": "pending"
+    "status": "in_progress"
   },
   {
     "content": "Phase 3: Trainer workflow + LLM assistance + Analytics",

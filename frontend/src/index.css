@@ -1,115 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
+@layer base {
+  :root {
+    --background: 42 45% 96%;
+    --foreground: 240 10% 8%;
+    --card: 42 55% 98%;
+    --card-foreground: 240 10% 10%;
+    --popover: 42 55% 98%;
+    --popover-foreground: 240 10% 10%;
+    --muted: 42 18% 92%;
+    --muted-foreground: 240 4% 40%;
+    --border: 42 14% 86%;
+    --input: 42 14% 86%;
+    --ring: 43 78% 52%;
+    --radius: 0.75rem;
+    --primary: 240 10% 8%;
+    --primary-foreground: 42 50% 96%;
+    --secondary: 42 22% 92%;
+    --secondary-foreground: 240 10% 10%;
+    --accent: 43 72% 52%;
+    --accent-foreground: 240 10% 8%;
+    --destructive: 0 78% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 146 42% 34%;
+    --warning: 38 92% 50%;
+    --info: 215 85% 46%;
+    --ink: 240 10% 8%;
+    --ivory: 42 45% 96%;
+    --gold: 43 72% 52%;
+    --gold-soft: 43 60% 84%;
+    --brand: 43 72% 52%;
+    --brand-foreground: 240 10% 8%;
+    --chart-1: 43 72% 52%;
+    --chart-2: 215 85% 46%;
+    --chart-3: 146 42% 34%;
+    --chart-4: 0 78% 52%;
+    --chart-5: 38 92% 50%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 43 78% 52%;
+  }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+  [data-business="ajpl"] {
+    --brand: 43 72% 52%;
+    --brand-foreground: 240 10% 8%;
+  }
+
+  [data-business="yash"] {
+    --brand: 221 100% 56%;
+    --brand-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {
-    :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
-    }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Manrope', sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: 'Manrope', sans-serif;
+  }
+  .font-display {
+    font-family: 'Bodoni Moda', serif;
+  }
+  .font-mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
 }
 
-@layer base {
-    * {
-        @apply border-border;
-    }
-    body {
-        @apply bg-background text-foreground;
-    }
+.noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('https://www.transparenttextures.com/patterns/asfalt-dark.png');
+  opacity: 0.03;
+  pointer-events: none;
+  mix-blend-mode: multiply;
 }
 
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
-    }
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
