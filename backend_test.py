@@ -1,287 +1,357 @@
 #!/usr/bin/env python3
+"""
+Backend API Testing for Yash Ornaments WayFinder
+Tests all new branding, QR generation, media upload, and scanning features.
+"""
 
 import requests
 import sys
-from datetime import datetime
 import json
+from datetime import datetime
+from pathlib import Path
 
-class NavigationAPITester:
+class YashWayFinderTester:
     def __init__(self, base_url="https://content-section.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.session_id = None
-        self.business_id = None
+        self.failures = []
+        self.admin_username = "admin"
+        self.admin_otp = "admin123"
+
+    def log_result(self, test_name, success, details=""):
+        """Log test result"""
+        self.tests_run += 1
+        if success:
+            self.tests_passed += 1
+            print(f"✅ {test_name}")
+        else:
+            print(f"❌ {test_name} - {details}")
+            self.failures.append({"test": test_name, "error": details})
 
     def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
         """Run a single API test"""
-        url = f"{self.base_url}/api/{endpoint}"
-        
-        if headers is None:
-            headers = {'Content-Type': 'application/json'}
-        
-        if self.token and 'Authorization' not in headers:
-            headers['Authorization'] = f'Bearer {self.token}'
+        url = f"{self.base_url}/api/{endpoint.lstrip('/')}"
+        test_headers = {'Content-Type': 'application/json'}
+        if headers:
+            test_headers.update(headers)
+        if self.token:
+            test_headers['Authorization'] = f'Bearer {self.token}'
 
-        self.tests_run += 1
         print(f"\n🔍 Testing {name}...")
-        print(f"   URL: {url}")
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=test_headers, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers)
+                response = requests.post(url, json=data, headers=test_headers, timeout=10)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers)
+                response = requests.put(url, json=data, headers=test_headers, timeout=10)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=test_headers, timeout=10)
 
             success = response.status_code == expected_status
+            
             if success:
-                self.tests_passed += 1
-                print(f"✅ PASSED - Status: {response.status_code}")
-                
-                # Print response data for certain endpoints
-                if endpoint in ['sessions/create', 'routes', 'gold-rates', 'admin/stats']:
-                    try:
-                        resp_data = response.json()
-                        if isinstance(resp_data, dict):
-                            if 'session' in resp_data:
-                                print(f"   Session ID: {resp_data['session'].get('id', 'N/A')}")
-                                print(f"   Business: {resp_data.get('business', {}).get('name', 'N/A')}")
-                            elif 'active_sessions' in resp_data:
-                                print(f"   Active Sessions: {resp_data.get('active_sessions', 'N/A')}")
-                                print(f"   AJPL Active: {resp_data.get('ajpl_active', 'N/A')}")
-                                print(f"   Yash Active: {resp_data.get('yash_active', 'N/A')}")
-                            elif isinstance(resp_data, list) and len(resp_data) > 0:
-                                print(f"   Items count: {len(resp_data)}")
-                    except Exception:
-                        pass
-                        
-            else:
-                print(f"❌ FAILED - Expected {expected_status}, got {response.status_code}")
+                self.log_result(name, True)
                 try:
-                    error_data = response.json()
-                    print(f"   Error: {error_data.get('detail', 'Unknown error')}")
+                    return response.json() if response.content else {}
                 except:
-                    print(f"   Raw response: {response.text[:200]}")
-
-            return success, response.json() if success and response.text else {}
+                    return {"status": "success", "raw_response": response.text}
+            else:
+                error_msg = f"Expected {expected_status}, got {response.status_code}"
+                if response.content:
+                    try:
+                        error_data = response.json()
+                        if 'detail' in error_data:
+                            error_msg += f" - {error_data['detail']}"
+                    except:
+                        error_msg += f" - {response.text[:100]}"
+                self.log_result(name, False, error_msg)
+                return {}
 
         except Exception as e:
-            print(f"❌ FAILED - Error: {str(e)}")
-            return False, {}
-
-    def test_session_creation(self, qr_code, expected_business_slug):
-        """Test session creation with QR code"""
-        success, response = self.run_test(
-            f"Create Session with {qr_code}",
-            "POST",
-            "sessions/create",
-            200,
-            data={"qr_code": qr_code, "device_info": "Test Browser"}
-        )
-        if success and 'session' in response:
-            self.session_id = response['session']['id']
-            self.business_id = response['session']['business_id']
-            
-            # Verify correct business
-            business_slug = response.get('business', {}).get('slug', '')
-            if business_slug == expected_business_slug:
-                print(f"   ✅ Correct business: {business_slug}")
-                return True
-            else:
-                print(f"   ❌ Wrong business: expected {expected_business_slug}, got {business_slug}")
-                return False
-        return False
-
-    def test_get_routes(self):
-        """Test getting all published routes"""
-        success, response = self.run_test(
-            "Get Routes",
-            "GET", 
-            "routes",
-            200
-        )
-        if success:
-            if isinstance(response, list) and len(response) >= 5:
-                print(f"   ✅ Found {len(response)} routes")
-                # Check route names
-                route_names = [r.get('name', '') for r in response]
-                expected_routes = ["From Metro Gate 5", "From Red Fort Side", "From Omaxe Mall", "From Town Hall", "From Building Entrance"]
-                found_routes = sum(1 for name in expected_routes if any(name in route_name for route_name in route_names))
-                print(f"   ✅ Found {found_routes}/{len(expected_routes)} expected routes")
-                return len(response) >= 5
-            else:
-                print(f"   ❌ Expected at least 5 routes, got {len(response) if isinstance(response, list) else 0}")
-        return False
-
-    def test_gold_rates(self):
-        """Test gold rates API (AJPL feature)"""
-        success, response = self.run_test(
-            "Get Gold Rates",
-            "GET",
-            "gold-rates", 
-            200
-        )
-        if success:
-            rate_24k = response.get('rate_24k', 0)
-            rate_22k = response.get('rate_22k', 0)
-            if rate_24k > 0 and rate_22k > 0:
-                print(f"   ✅ Valid gold rates: 24K=₹{rate_24k}, 22K=₹{rate_22k}")
-                return True
-            else:
-                print(f"   ❌ Invalid gold rates: 24K=₹{rate_24k}, 22K=₹{rate_22k}")
-        return False
+            self.log_result(name, False, f"Exception: {str(e)}")
+            return {}
 
     def test_admin_login(self):
-        """Test admin login with bypass OTP"""
-        success, response = self.run_test(
+        """Test admin login"""
+        print("\n═══ ADMIN AUTHENTICATION ═══")
+        response = self.run_test(
             "Admin Login",
             "POST",
             "auth/login",
             200,
-            data={"username": "admin", "otp": "admin123"}
+            {"username": self.admin_username, "otp": self.admin_otp}
         )
-        if success and 'token' in response:
+        if response and 'token' in response:
             self.token = response['token']
-            user_role = response.get('user', {}).get('role', '')
-            if user_role == 'admin':
-                print(f"   ✅ Admin logged in successfully")
-                return True
-            else:
-                print(f"   ❌ Wrong user role: expected admin, got {user_role}")
+            return True
         return False
 
-    def test_admin_stats(self):
-        """Test admin dashboard statistics"""
-        success, response = self.run_test(
-            "Admin Dashboard Stats",
-            "GET",
-            "admin/stats",
+    def test_branding_apis(self):
+        """Test branding configuration APIs"""
+        print("\n═══ BRANDING APIS ═══")
+        
+        # Test public branding endpoint
+        branding = self.run_test(
+            "GET /api/branding (public)",
+            "GET", 
+            "branding",
             200
         )
-        if success:
-            required_keys = ['active_sessions', 'completed_sessions', 'help_pending', 'callback_pending', 'ajpl_active', 'yash_active']
-            has_all_keys = all(key in response for key in required_keys)
-            if has_all_keys:
-                print(f"   ✅ All required KPI fields present")
-                return True
+        
+        # Verify app name is updated
+        if branding:
+            app_name = branding.get('app_name', '')
+            if 'Yash Ornaments WayFinder' in app_name:
+                self.log_result("App name shows 'Yash Ornaments WayFinder'", True)
             else:
-                missing_keys = [key for key in required_keys if key not in response]
-                print(f"   ❌ Missing KPI fields: {missing_keys}")
-        return False
-
-    def test_session_events(self):
-        """Test adding session events"""
-        if not self.session_id:
-            print("❌ No session ID available for event testing")
-            return False
+                self.log_result("App name shows 'Yash Ornaments WayFinder'", False, f"Got: {app_name}")
             
-        # Test route selection event
-        success, response = self.run_test(
-            "Add Route Selection Event",
-            "POST",
-            f"sessions/{self.session_id}/events",
-            200,
-            data={
-                "event_type": "route_selected",
-                "event_data": {"route_id": "test-route-id", "route_name": "Test Route"},
-                "checkpoint_id": ""
-            }
-        )
-        return success
+            footer = branding.get('branding_footer', '')
+            if 'Navigation powered by YASH ORNAMENTS' in footer:
+                self.log_result("Branding footer correct", True)
+            else:
+                self.log_result("Branding footer correct", False, f"Got: {footer}")
 
-    def test_callback_request(self):
-        """Test callback request functionality"""
-        if not self.session_id:
-            print("❌ No session ID available for callback testing")
-            return False
-            
-        success, response = self.run_test(
-            "Create Callback Request",
-            "POST",
-            f"sessions/{self.session_id}/callback",
-            200,
-            data={
-                "customer_name": "Test User",
-                "customer_phone": "+91-9876543210",
-                "issue_type": "cannot_find_building",
-                "notes": "Test callback request"
-            }
+        # Test admin branding endpoints
+        admin_branding = self.run_test(
+            "GET /api/admin/branding", 
+            "GET",
+            "admin/branding",
+            200
         )
-        return success
+        
+        if admin_branding:
+            # Test updating branding settings
+            updated_branding = {
+                **admin_branding,
+                "watermark_opacity": 0.25,
+                "app_name": "Yash Ornaments WayFinder"
+            }
+            
+            self.run_test(
+                "PUT /api/admin/branding",
+                "PUT",
+                "admin/branding", 
+                200,
+                updated_branding
+            )
+
+    def test_qr_generation_apis(self):
+        """Test QR code generation APIs"""
+        print("\n═══ QR GENERATION APIS ═══")
+        
+        # Get businesses first
+        businesses = self.run_test(
+            "GET /api/admin/businesses",
+            "GET",
+            "admin/businesses", 
+            200
+        )
+        
+        if not businesses:
+            self.log_result("QR Generation (no businesses found)", False, "Cannot test without businesses")
+            return
+        
+        # Find AJPL and Yash businesses
+        ajpl_biz = None
+        yash_biz = None
+        for biz in businesses:
+            if biz.get('slug') == 'ajpl':
+                ajpl_biz = biz
+            elif biz.get('slug') == 'yash':
+                yash_biz = biz
+        
+        # Test QR generation for AJPL
+        if ajpl_biz:
+            qr_result = self.run_test(
+                "POST /api/admin/qr/generate (AJPL)",
+                "POST",
+                "admin/qr/generate",
+                200,
+                {
+                    "business_id": ajpl_biz['id'],
+                    "campaign": "test-ajpl",
+                    "description": "Test QR for AJPL"
+                }
+            )
+            
+            if qr_result and 'qr_code' in qr_result:
+                qr_code = qr_result['qr_code']
+                if qr_code.startswith('AJPL-'):
+                    self.log_result("QR code has AJPL prefix", True)
+                else:
+                    self.log_result("QR code has AJPL prefix", False, f"Got: {qr_code}")
+                
+                # Test the scan URL
+                if 'scan_url' in qr_result:
+                    scan_url = qr_result['scan_url']
+                    if 'content-section.preview.emergentagent.com' in scan_url:
+                        self.log_result("QR scan URL correct domain", True)
+                    else:
+                        self.log_result("QR scan URL correct domain", False, f"Got: {scan_url}")
+
+    def test_scan_apis(self):
+        """Test QR scanning APIs using predefined test QR codes"""
+        print("\n═══ QR SCANNING APIS ═══")
+        
+        # Test with the predefined test QR codes from the review request
+        test_qr_codes = ["AJPL-33E0F163", "YASH-1D598159"]
+        
+        for qr_code in test_qr_codes:
+            # Test getting QR info
+            qr_info = self.run_test(
+                f"GET /api/scan/{qr_code}/info",
+                "GET",
+                f"scan/{qr_code}/info",
+                200
+            )
+            
+            if qr_info:
+                business = qr_info.get('business', {})
+                business_name = business.get('name', '')
+                
+                if qr_code.startswith('AJPL'):
+                    if 'ajpl' in business.get('slug', '').lower():
+                        self.log_result(f"QR {qr_code} returns AJPL business", True)
+                    else:
+                        self.log_result(f"QR {qr_code} returns AJPL business", False, f"Got business: {business_name}")
+                elif qr_code.startswith('YASH'):
+                    if 'yash' in business.get('slug', '').lower():
+                        self.log_result(f"QR {qr_code} returns Yash business", True)
+                    else:
+                        self.log_result(f"QR {qr_code} returns Yash business", False, f"Got business: {business_name}")
+                
+                # Test customer registration
+                registration = self.run_test(
+                    f"POST /api/scan/{qr_code}/register",
+                    "POST", 
+                    f"scan/{qr_code}/register",
+                    200,
+                    {
+                        "customer_name": "Test Customer",
+                        "customer_phone": "9876543210",
+                        "device_info": "Test Device"
+                    }
+                )
+                
+                if registration and 'session' in registration:
+                    session = registration['session']
+                    if session.get('customer_name') == "Test Customer":
+                        self.log_result(f"QR {qr_code} registration success", True)
+                    else:
+                        self.log_result(f"QR {qr_code} registration success", False, "Customer name not saved")
+
+    def test_media_apis(self):
+        """Test media upload and watermark APIs"""
+        print("\n═══ MEDIA APIS ═══")
+        
+        # Test placeholder media generation
+        placeholder = self.run_test(
+            "GET /api/media/placeholder/Metro-Gate-5",
+            "GET",
+            "media/placeholder/Metro-Gate-5",
+            200,
+            headers={'Accept': 'image/jpeg'}
+        )
+        
+        # Cannot test file upload without actual files, but test the endpoint existence
+        # We'll use playwright to test the actual file upload workflow
+        
+        # Test admin media endpoints
+        media_list = self.run_test(
+            "GET /api/admin/media",
+            "GET", 
+            "admin/media",
+            200
+        )
+
+    def test_core_navigation_apis(self):
+        """Test core navigation APIs still work"""
+        print("\n═══ CORE NAVIGATION APIS ═══")
+        
+        # Test routes
+        routes = self.run_test("GET /api/routes", "GET", "routes", 200)
+        
+        # Test gold rates (AJPL only feature)
+        self.run_test("GET /api/gold-rates", "GET", "gold-rates", 200)
+        
+        # Test gallery (AJPL only feature) 
+        self.run_test("GET /api/gallery", "GET", "gallery", 200)
+
+    def test_admin_qr_sources(self):
+        """Test admin QR sources management"""
+        print("\n═══ ADMIN QR SOURCES ═══")
+        
+        qr_sources = self.run_test(
+            "GET /api/admin/qr-sources",
+            "GET",
+            "admin/qr-sources", 
+            200
+        )
+        
+        if qr_sources and len(qr_sources) > 0:
+            # Check if our test QR codes exist
+            existing_codes = [qr.get('code', '') for qr in qr_sources]
+            for test_code in ["AJPL-33E0F163", "YASH-1D598159"]:
+                if test_code in existing_codes:
+                    self.log_result(f"Test QR code {test_code} exists in DB", True)
+                else:
+                    self.log_result(f"Test QR code {test_code} exists in DB", False, "QR code not found")
+
+    def run_all_tests(self):
+        """Run all tests"""
+        print("🚀 Starting Yash Ornaments WayFinder API Tests")
+        print(f"Backend URL: {self.base_url}")
+        print("=" * 60)
+        
+        # Login first
+        if not self.test_admin_login():
+            print("❌ Admin login failed - cannot continue with admin tests")
+            return self.generate_report()
+        
+        # Run all test categories
+        self.test_branding_apis()
+        self.test_qr_generation_apis() 
+        self.test_scan_apis()
+        self.test_media_apis()
+        self.test_admin_qr_sources()
+        self.test_core_navigation_apis()
+        
+        return self.generate_report()
+
+    def generate_report(self):
+        """Generate test report"""
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY")
+        print("=" * 60)
+        print(f"Total Tests: {self.tests_run}")
+        print(f"Passed: {self.tests_passed}")
+        print(f"Failed: {self.tests_run - self.tests_passed}")
+        print(f"Success Rate: {(self.tests_passed/max(self.tests_run,1)*100):.1f}%")
+        
+        if self.failures:
+            print("\n❌ FAILURES:")
+            for failure in self.failures:
+                print(f"  • {failure['test']}: {failure['error']}")
+        
+        return {
+            "total": self.tests_run,
+            "passed": self.tests_passed,
+            "failed": self.tests_run - self.tests_passed,
+            "success_rate": self.tests_passed/max(self.tests_run,1)*100,
+            "failures": self.failures
+        }
 
 def main():
-    print("🚀 Starting Chandni Chowk Navigation API Tests")
-    print("=" * 60)
+    tester = YashWayFinderTester()
+    report = tester.run_all_tests()
     
-    tester = NavigationAPITester()
-
-    # Test 1: AJPL Session Creation
-    print("\n📱 Testing AJPL Session Creation...")
-    ajpl_session_success = tester.test_session_creation("AJPL-DEFAULT", "ajpl")
-    
-    # Test 2: Routes API
-    print("\n🗺️ Testing Routes API...")
-    routes_success = tester.test_get_routes()
-    
-    # Test 3: Gold Rates API (AJPL feature)
-    print("\n💰 Testing Gold Rates API...")
-    gold_rates_success = tester.test_gold_rates()
-    
-    # Test 4: Session Events
-    print("\n📊 Testing Session Events...")
-    events_success = tester.test_session_events()
-    
-    # Test 5: Callback Request
-    print("\n📞 Testing Callback Request...")
-    callback_success = tester.test_callback_request()
-    
-    # Test 6: Admin Login
-    print("\n🔐 Testing Admin Authentication...")
-    admin_login_success = tester.test_admin_login()
-    
-    # Test 7: Admin Stats
-    print("\n📈 Testing Admin Dashboard Stats...")
-    admin_stats_success = tester.test_admin_stats()
-    
-    # Test 8: Yash Session Creation 
-    print("\n🏪 Testing Yash Session Creation...")
-    yash_session_success = tester.test_session_creation("YASH-DEFAULT", "yash")
-
-    # Print Results
-    print("\n" + "=" * 60)
-    print("📊 TEST RESULTS SUMMARY")
-    print("=" * 60)
-    print(f"Total Tests: {tester.tests_run}")
-    print(f"Passed: {tester.tests_passed}")
-    print(f"Failed: {tester.tests_run - tester.tests_passed}")
-    print(f"Success Rate: {(tester.tests_passed/tester.tests_run*100):.1f}%")
-    
-    # Critical test results
-    critical_tests = {
-        "AJPL Session Creation": ajpl_session_success,
-        "Yash Session Creation": yash_session_success, 
-        "Routes API": routes_success,
-        "Gold Rates API": gold_rates_success,
-        "Admin Login": admin_login_success,
-        "Admin Stats API": admin_stats_success
-    }
-    
-    print(f"\n🎯 Critical Test Results:")
-    for test_name, passed in critical_tests.items():
-        status = "✅ PASS" if passed else "❌ FAIL"
-        print(f"   {test_name}: {status}")
-    
-    # Return exit code
-    critical_failures = sum(1 for passed in critical_tests.values() if not passed)
-    if critical_failures == 0:
-        print(f"\n🎉 All critical tests passed!")
-        return 0
-    else:
-        print(f"\n⚠️  {critical_failures} critical test(s) failed!")
-        return 1
+    # Return non-zero exit code if there are failures
+    return 0 if report["failed"] == 0 else 1
 
 if __name__ == "__main__":
     sys.exit(main())

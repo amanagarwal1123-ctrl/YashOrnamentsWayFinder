@@ -53,8 +53,8 @@ export default function AdminDashboard() {
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold" data-testid="admin-dashboard-title">Dashboard</h1>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">Navigation System Overview</p>
+              <h1 className="text-2xl font-bold" data-testid="admin-dashboard-title">WayFinder Dashboard</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Yash Ornaments Navigation System</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-green-100 text-green-700">

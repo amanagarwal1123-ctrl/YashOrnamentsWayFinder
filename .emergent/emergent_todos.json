@@ -1,42 +1,42 @@
 [
   {
-    "content": "Phase 1: POC - Test LLM integration (OpenAI via Emergent key) for checkpoint suggestions",
+    "content": "Phase 3A: Rename app to 'Yash Ornaments WayFinder' across all UI",
     "status": "completed"
   },
   {
-    "content": "Phase 1: POC - Verify LLM can generate checkpoint titles, instructions, warnings, landmarks",
+    "content": "Phase 3A: Add watermark system (Pillow-based image watermarking, diagonal repeating text)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Design guidelines + Environment setup",
+    "content": "Phase 3A: Media upload pipeline with automatic watermarking",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Data models, seed data, all API endpoints",
+    "content": "Phase 3A: Navigation screen branding 'Navigation powered by YASH ORNAMENTS'",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Customer navigation UI (mobile-first)",
+    "content": "Phase 3A: Media access protection (no right-click, hotlink blocking)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Admin dashboard + Helpdesk dashboard",
+    "content": "Phase 3A: Admin Branding Settings page (watermark config)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: All user stories covered in Development and testing",
+    "content": "Phase 3A: Admin Media Management page (uploaded media list, preview, status)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: End to End Testing using Testing Agent",
+    "content": "Phase 3A: QR Code Generation tab in admin (AJPL/Yash, scannable QR)",
     "status": "completed"
   },
   {
-    "content": "Phase 3: Trainer workflow + LLM assistance + Analytics",
+    "content": "Phase 3A: Customer QR landing - blurred map background + name/phone form",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 3A: End to End Testing",
     "status": "in_progress"
-  },
-  {
-    "content": "Phase 4: OTP Auth + Role-based access + Finalization",
-    "status": "pending"
   }
 ]

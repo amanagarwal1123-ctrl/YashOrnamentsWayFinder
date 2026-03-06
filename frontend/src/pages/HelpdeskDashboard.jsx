@@ -97,7 +97,7 @@ export default function HelpdeskDashboard() {
           <div className="flex items-center gap-3">
             <Headphones className="w-5 h-5 text-[hsl(var(--brand))]" />
             <div>
-              <h1 className="font-semibold">Helpdesk Dashboard</h1>
+              <h1 className="font-semibold">WayFinder Helpdesk</h1>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">{user?.display_name || 'Agent'}</p>
             </div>
           </div>

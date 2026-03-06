@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
 import { getRouteCheckpoints, addSessionEvent } from '@/lib/api';
-import { BrandHeader, BottomActionBar, DirectionIcon } from '@/components/shared';
+import { BrandHeader, BottomActionBar, DirectionIcon, BrandingFooter } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -200,6 +200,8 @@ export default function CheckpointNavPage() {
             </div>
           </motion.div>
         </AnimatePresence>
+
+        <BrandingFooter />
       </div>
 
       {/* Bottom: Confirm / Next */}

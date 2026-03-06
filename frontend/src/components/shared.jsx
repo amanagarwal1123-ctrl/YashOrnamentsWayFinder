@@ -103,7 +103,10 @@ export const AdminSidebar = ({ active }) => {
     { id: 'sessions', label: 'Sessions', icon: Navigation, path: '/admin/sessions' },
     { id: 'routes', label: 'Routes', icon: Route, path: '/admin/routes' },
     { id: 'users', label: 'Users', icon: Users, path: '/admin/users' },
+    { id: 'qr-codes', label: 'QR Codes', icon: Navigation, path: '/admin/qr-codes' },
+    { id: 'media', label: 'Media', icon: Navigation, path: '/admin/media' },
     { id: 'gold-rates', label: 'Gold Rates', icon: Coins, path: '/admin/gold-rates' },
+    { id: 'branding', label: 'Branding', icon: Navigation, path: '/admin/branding' },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
     { id: 'helpdesk', label: 'Helpdesk', icon: Headphones, path: '/helpdesk' },
   ];
@@ -111,8 +114,8 @@ export const AdminSidebar = ({ active }) => {
   return (
     <aside className="w-60 min-h-screen bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] flex flex-col">
       <div className="p-4 border-b border-[hsl(var(--border))]">
-        <h2 className="font-display font-bold text-lg">Admin Panel</h2>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">Navigation System</p>
+        <h2 className="font-display font-bold text-base">Yash Ornaments</h2>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">WayFinder Admin</p>
       </div>
       <nav className="flex-1 py-2">
         {items.map(item => (
@@ -159,5 +162,31 @@ export const StatusBadge = ({ status }) => {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${colors[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`} data-testid="status-badge">
       {status?.replace(/_/g, ' ')}
     </span>
+  );
+};
+
+
+export const BrandingFooter = ({ className = '' }) => {
+  return (
+    <div className={`text-center py-3 ${className}`} data-testid="branding-footer">
+      <p className="text-[10px] text-[hsl(var(--muted-foreground))] tracking-wide">
+        Navigation powered by <span className="font-semibold">YASH ORNAMENTS</span>
+      </p>
+    </div>
+  );
+};
+
+export const ProtectedImage = ({ src, alt, className = '', ...props }) => {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onContextMenu={e => e.preventDefault()}
+      onDragStart={e => e.preventDefault()}
+      draggable={false}
+      style={{ WebkitUserSelect: 'none', userSelect: 'none', pointerEvents: 'auto' }}
+      {...props}
+    />
   );
 };

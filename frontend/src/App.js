@@ -6,6 +6,7 @@ import '@/App.css';
 
 // Pages
 import LandingPage from '@/pages/LandingPage';
+import ScanLandingPage from '@/pages/ScanLandingPage';
 import RouteSelectionPage from '@/pages/RouteSelectionPage';
 import CheckpointNavPage from '@/pages/CheckpointNavPage';
 import TreasureMapPage from '@/pages/TreasureMapPage';
@@ -19,6 +20,9 @@ import AdminSessions from '@/pages/AdminSessions';
 import AdminUsers from '@/pages/AdminUsers';
 import AdminGoldRates from '@/pages/AdminGoldRates';
 import AdminAnalytics from '@/pages/AdminAnalytics';
+import AdminQRGeneration from '@/pages/AdminQRGeneration';
+import AdminBrandingSettings from '@/pages/AdminBrandingSettings';
+import AdminMediaManagement from '@/pages/AdminMediaManagement';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
 import GoldRatePage from '@/pages/GoldRatePage';
 import GalleryPage from '@/pages/GalleryPage';
@@ -32,6 +36,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/start" element={<LandingPage />} />
           <Route path="/start/:qrCode" element={<LandingPage />} />
+          <Route path="/scan/:qrCode" element={<ScanLandingPage />} />
           <Route path="/routes" element={<RouteSelectionPage />} />
           <Route path="/navigate" element={<CheckpointNavPage />} />
           <Route path="/map" element={<TreasureMapPage />} />
@@ -51,6 +56,9 @@ function App() {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/gold-rates" element={<AdminGoldRates />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
+          <Route path="/admin/qr-codes" element={<AdminQRGeneration />} />
+          <Route path="/admin/branding" element={<AdminBrandingSettings />} />
+          <Route path="/admin/media" element={<AdminMediaManagement />} />
           
           {/* Helpdesk Routes */}
           <Route path="/helpdesk" element={<HelpdeskDashboard />} />

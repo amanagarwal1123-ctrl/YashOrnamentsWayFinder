@@ -175,8 +175,8 @@ export default function LandingPage() {
             <div className="w-16 h-16 rounded-2xl bg-[hsl(var(--primary))] flex items-center justify-center mx-auto mb-4">
               <Navigation className="w-8 h-8 text-[hsl(var(--primary-foreground))]" />
             </div>
-            <h1 className="font-display text-3xl font-bold mb-2">Chandni Chowk</h1>
-            <h2 className="font-display text-xl text-[hsl(var(--gold))]">Navigation Guide</h2>
+            <h1 className="font-display text-3xl font-bold mb-2">Yash Ornaments</h1>
+            <h2 className="font-display text-xl text-[hsl(var(--gold))]">WayFinder</h2>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-2">Step-by-step guidance to your destination</p>
           </div>
 

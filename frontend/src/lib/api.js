@@ -106,3 +106,29 @@ export const createHelpdeskSSE = () => {
   const url = `${BACKEND_URL}/api/helpdesk/notifications/stream`;
   return new EventSource(url);
 };
+
+// ---- Media ----
+export const uploadMedia = (formData) => API.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const serveMediaUrl = (mediaId) => `${BACKEND_URL}/api/media/${mediaId}/serve`;
+export const placeholderMediaUrl = (label) => `${BACKEND_URL}/api/media/placeholder/${encodeURIComponent(label)}`;
+export const adminGetMedia = (mediaType, routeId) => {
+  let url = '/admin/media?';
+  if (mediaType) url += `media_type=${mediaType}&`;
+  if (routeId) url += `route_id=${routeId}`;
+  return API.get(url);
+};
+export const adminDeleteMedia = (mediaId) => API.delete(`/admin/media/${mediaId}`);
+
+// ---- Branding ----
+export const getBranding = () => API.get('/branding');
+export const adminGetBranding = () => API.get('/admin/branding');
+export const adminUpdateBranding = (data) => API.put('/admin/branding', data);
+
+// ---- QR Generation ----
+export const adminGenerateQR = (data) => API.post('/admin/qr/generate', data);
+export const adminGetQRImageUrl = (qrCode) => `${BACKEND_URL}/api/admin/qr/${qrCode}/image`;
+
+// ---- QR Scan (customer flow) ----
+export const getQRInfo = (qrCode) => API.get(`/scan/${qrCode}/info`);
+export const registerFromScan = (qrCode, data) => API.post(`/scan/${qrCode}/register`, data);
+

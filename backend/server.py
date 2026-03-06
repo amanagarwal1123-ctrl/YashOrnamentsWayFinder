@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, Response
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,11 +8,15 @@ import os
 import logging
 import json
 import asyncio
+import io
+import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import uuid
 import secrets
+import qrcode
+from qrcode.image.styledpil import StyledPilImage
 
 from models import (
     Session, SessionEvent, CallbackRequest, HelpdeskCase, HelpdeskCaseUpdate,
@@ -21,9 +26,19 @@ from models import (
     QRSource, Business
 )
 from utils import serialize_doc, now_utc, to_iso
+from watermark import (
+    apply_watermark_to_image, apply_watermark_to_bytes,
+    generate_placeholder_watermarked, get_branding_config,
+    ORIGINALS_DIR, WATERMARKED_DIR, MEDIA_DIR
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Ensure media directories
+QR_DIR = MEDIA_DIR / "qr_codes"
+for d in [ORIGINALS_DIR, WATERMARKED_DIR, QR_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -1020,10 +1035,376 @@ async def where_am_i(data: dict):
 # ========== Root ==========
 @api_router.get("/")
 async def root():
-    return {"message": "Chandni Chowk Navigation API", "version": "1.0.0"}
+    return {"message": "Yash Ornaments WayFinder API", "version": "2.0.0"}
+
+# ========== MEDIA UPLOAD + WATERMARK ==========
+@api_router.post("/media/upload")
+async def upload_media(
+    file: UploadFile = File(...),
+    route_id: str = Form(""),
+    checkpoint_id: str = Form(""),
+    media_type: str = Form("checkpoint_image"),  # checkpoint_image, arrow_map, route_image, route_video
+    uploaded_by: str = Form(""),
+):
+    """Upload media with automatic watermarking."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'png'
+    media_id = gen_id()
+    original_filename = f"{media_id}_original.{file_ext}"
+    watermarked_filename = f"{media_id}_watermarked.{file_ext}"
+    
+    # Read file content
+    content = await file.read()
+    
+    # Save original
+    original_path = ORIGINALS_DIR / original_filename
+    with open(original_path, 'wb') as f:
+        f.write(content)
+    
+    # Get branding config from DB
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    config = get_branding_config(branding)
+    
+    watermark_applied = False
+    watermarked_path_str = str(WATERMARKED_DIR / watermarked_filename)
+    
+    # Apply watermark for images
+    if file_ext in ('jpg', 'jpeg', 'png', 'webp', 'bmp'):
+        try:
+            apply_watermark_to_image(
+                str(original_path),
+                watermarked_path_str,
+                watermark_text=config['watermark_text'],
+                opacity=config['watermark_opacity'],
+                font_size=config.get('watermark_font_size', 36),
+                rotation=int(config.get('watermark_rotation', -30)),
+                spacing=int(config.get('watermark_spacing', 200)),
+            )
+            watermark_applied = True
+        except Exception as e:
+            logger.error(f"Watermark failed: {e}")
+            shutil.copy2(str(original_path), watermarked_path_str)
+    else:
+        # For non-image files (video etc), just copy for now
+        shutil.copy2(str(original_path), watermarked_path_str)
+    
+    # Store metadata in DB
+    media_doc = {
+        'id': media_id,
+        'filename': file.filename,
+        'file_ext': file_ext,
+        'media_type': media_type,
+        'route_id': route_id,
+        'checkpoint_id': checkpoint_id,
+        'uploaded_by': uploaded_by,
+        'upload_timestamp': now_utc().isoformat(),
+        'watermark_applied': watermark_applied,
+        'watermark_text': config['watermark_text'],
+        'original_file': original_filename,
+        'watermarked_file': watermarked_filename,
+        'file_size': len(content),
+        'content_type': file.content_type or 'application/octet-stream',
+    }
+    await db.media_files.insert_one(media_doc)
+    
+    return serialize_doc(media_doc)
+
+@api_router.get("/media/{media_id}/serve")
+async def serve_media(media_id: str, original: bool = False):
+    """Serve watermarked media (or original for admin preview)."""
+    media = await db.media_files.find_one({'id': media_id})
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    
+    if original:
+        file_path = ORIGINALS_DIR / media['original_file']
+    else:
+        file_path = WATERMARKED_DIR / media['watermarked_file']
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    
+    content_type = media.get('content_type', 'application/octet-stream')
+    ext = media.get('file_ext', 'png')
+    if ext in ('jpg', 'jpeg'):
+        content_type = 'image/jpeg'
+    elif ext == 'png':
+        content_type = 'image/png'
+    elif ext == 'webp':
+        content_type = 'image/webp'
+    
+    # Add headers to prevent direct downloading/hotlinking
+    headers = {
+        'Cache-Control': 'no-store, max-age=0',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': 'inline',
+    }
+    
+    return Response(
+        content=file_path.read_bytes(),
+        media_type=content_type,
+        headers=headers,
+    )
+
+@api_router.get("/media/{media_id}/preview-watermark")
+async def preview_watermark(media_id: str):
+    """Preview what the watermarked version looks like."""
+    media = await db.media_files.find_one({'id': media_id})
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    
+    wm_path = WATERMARKED_DIR / media['watermarked_file']
+    if not wm_path.exists():
+        raise HTTPException(status_code=404, detail="Watermarked file not found")
+    
+    ext = media.get('file_ext', 'png')
+    ct = 'image/jpeg' if ext in ('jpg', 'jpeg') else 'image/png'
+    
+    return Response(content=wm_path.read_bytes(), media_type=ct)
+
+@api_router.get("/media/placeholder/{label}")
+async def get_placeholder_image(label: str = "Checkpoint"):
+    """Generate a watermarked placeholder image on-the-fly."""
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    config = get_branding_config(branding)
+    
+    img_bytes = generate_placeholder_watermarked(
+        label=label.replace('-', ' '),
+        watermark_text=config['watermark_text'],
+        opacity=config['watermark_opacity'],
+    )
+    return Response(content=img_bytes, media_type="image/jpeg")
+
+# ========== ADMIN: Media Management ==========
+@api_router.get("/admin/media")
+async def admin_get_media(media_type: str = None, route_id: str = None):
+    query = {}
+    if media_type:
+        query['media_type'] = media_type
+    if route_id:
+        query['route_id'] = route_id
+    media = await db.media_files.find(query, {'_id': 0}).sort('upload_timestamp', -1).to_list(200)
+    return serialize_doc(media)
+
+@api_router.delete("/admin/media/{media_id}")
+async def admin_delete_media(media_id: str):
+    media = await db.media_files.find_one({'id': media_id})
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    
+    # Delete files
+    for fname_key in ['original_file', 'watermarked_file']:
+        fname = media.get(fname_key, '')
+        if fname:
+            for d in [ORIGINALS_DIR, WATERMARKED_DIR]:
+                fp = d / fname
+                if fp.exists():
+                    fp.unlink()
+    
+    await db.media_files.delete_one({'id': media_id})
+    return {'status': 'deleted'}
+
+# ========== ADMIN: Branding Settings ==========
+@api_router.get("/admin/branding")
+async def admin_get_branding():
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    if not branding:
+        branding = {
+            'id': gen_id(),
+            'watermark_text': 'YASH ORNAMENTS',
+            'watermark_opacity': 0.20,
+            'watermark_font_size': 36,
+            'watermark_rotation': -30,
+            'watermark_spacing': 200,
+            'branding_footer': 'Navigation powered by YASH ORNAMENTS',
+            'app_name': 'Yash Ornaments WayFinder',
+            'updated_at': now_utc().isoformat(),
+        }
+        await db.branding_settings.insert_one(branding)
+    return serialize_doc(branding)
+
+@api_router.put("/admin/branding")
+async def admin_update_branding(data: dict):
+    existing = await db.branding_settings.find_one({})
+    data['updated_at'] = now_utc().isoformat()
+    data.pop('_id', None)
+    
+    if existing:
+        await db.branding_settings.update_one({'_id': existing['_id']}, {'$set': data})
+    else:
+        data['id'] = gen_id()
+        await db.branding_settings.insert_one(data)
+    
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    return serialize_doc(branding)
+
+# ========== ADMIN: QR Code Generation ==========
+@api_router.post("/admin/qr/generate")
+async def admin_generate_qr(data: dict):
+    """Generate a QR code for AJPL or Yash Ornaments."""
+    business_id = data.get('business_id', '')
+    campaign = data.get('campaign', 'qr-generated')
+    description = data.get('description', '')
+    
+    if not business_id:
+        raise HTTPException(status_code=400, detail="business_id required")
+    
+    business = await db.businesses.find_one({'id': business_id})
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    # Generate unique QR code
+    qr_code = f"{business['slug'].upper()}-{secrets.token_hex(4).upper()}"
+    
+    # Create QR source in DB
+    qr_source = {
+        'id': gen_id(),
+        'code': qr_code,
+        'business_id': business_id,
+        'campaign': campaign,
+        'description': description or f"Generated QR for {business['name']}",
+        'active': True,
+        'scan_count': 0,
+        'created_at': now_utc().isoformat(),
+    }
+    await db.qr_sources.insert_one(qr_source)
+    
+    # Generate QR code image
+    # The QR should encode a URL that includes the code
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://content-section.preview.emergentagent.com')
+    scan_url = f"{frontend_url}/scan/{qr_code}"
+    
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
+    qr.add_data(scan_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Save QR image
+    qr_filename = f"qr_{qr_code}.png"
+    qr_path = QR_DIR / qr_filename
+    img.save(str(qr_path))
+    
+    # Convert to bytes for response
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    
+    import base64
+    qr_base64 = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
+    
+    return {
+        'qr_source': serialize_doc(qr_source),
+        'qr_code': qr_code,
+        'scan_url': scan_url,
+        'qr_image_base64': qr_base64,
+        'business_name': business['name'],
+        'business_slug': business['slug'],
+    }
+
+@api_router.get("/admin/qr/{qr_code}/image")
+async def admin_get_qr_image(qr_code: str):
+    """Serve QR code image."""
+    qr_filename = f"qr_{qr_code}.png"
+    qr_path = QR_DIR / qr_filename
+    if not qr_path.exists():
+        raise HTTPException(status_code=404, detail="QR image not found")
+    return Response(content=qr_path.read_bytes(), media_type="image/png")
+
+# ========== PUBLIC: Scan QR entry (for the new customer flow) ==========
+@api_router.get("/scan/{qr_code}/info")
+async def get_qr_info(qr_code: str):
+    """Get QR code info for the customer landing page."""
+    qr = await db.qr_sources.find_one({'code': qr_code, 'active': True})
+    if not qr:
+        raise HTTPException(status_code=404, detail="Invalid QR code")
+    
+    business = await db.businesses.find_one({'id': qr['business_id']})
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    
+    return {
+        'qr_code': qr_code,
+        'business': serialize_doc(business),
+        'branding_footer': branding.get('branding_footer', 'Navigation powered by YASH ORNAMENTS') if branding else 'Navigation powered by YASH ORNAMENTS',
+    }
+
+@api_router.post("/scan/{qr_code}/register")
+async def register_from_scan(qr_code: str, data: dict):
+    """Register customer from QR scan landing page (name + phone)."""
+    customer_name = data.get('customer_name', '')
+    customer_phone = data.get('customer_phone', '')
+    
+    if not customer_name or not customer_phone:
+        raise HTTPException(status_code=400, detail="Name and phone number required")
+    
+    qr = await db.qr_sources.find_one({'code': qr_code, 'active': True})
+    if not qr:
+        raise HTTPException(status_code=404, detail="Invalid QR code")
+    
+    business = await db.businesses.find_one({'id': qr['business_id']})
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    # Increment scan count
+    await db.qr_sources.update_one({'code': qr_code}, {'$inc': {'scan_count': 1}})
+    
+    # Create session with customer info pre-filled
+    session = {
+        'id': gen_id(),
+        'business_id': business['id'],
+        'business_slug': business['slug'],
+        'qr_source_id': qr['id'],
+        'campaign': qr.get('campaign', ''),
+        'customer_name': customer_name,
+        'customer_phone': customer_phone,
+        'route_id': '',
+        'current_checkpoint_id': '',
+        'current_checkpoint_order': 0,
+        'status': 'active',
+        'arrived_building': False,
+        'arrived_destination': False,
+        'device_info': data.get('device_info', ''),
+        'help_requested': False,
+        'callback_requested': False,
+        'last_activity': now_utc().isoformat(),
+        'created_at': now_utc().isoformat(),
+    }
+    await db.sessions.insert_one(session)
+    
+    await log_event(session['id'], business['id'], 'qr_scan', {
+        'qr_code': qr_code, 'campaign': qr.get('campaign', ''),
+        'customer_name': customer_name
+    })
+    
+    return {
+        'session': serialize_doc(session),
+        'business': serialize_doc(business),
+    }
+
+# ========== PUBLIC: Branding info ==========
+@api_router.get("/branding")
+async def get_public_branding():
+    branding = await db.branding_settings.find_one({}, {'_id': 0})
+    if not branding:
+        return {
+            'branding_footer': 'Navigation powered by YASH ORNAMENTS',
+            'app_name': 'Yash Ornaments WayFinder',
+        }
+    return {
+        'branding_footer': branding.get('branding_footer', 'Navigation powered by YASH ORNAMENTS'),
+        'app_name': branding.get('app_name', 'Yash Ornaments WayFinder'),
+    }
 
 # Include router
 app.include_router(api_router)
+
+# Mount static media (with no-cache headers)
+app.mount("/media-files", StaticFiles(directory=str(WATERMARKED_DIR)), name="watermarked_media")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1036,3 +1417,4 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
