@@ -25,15 +25,15 @@
   },
   {
     "content": "Phase 2: All user stories covered in Development and testing",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 2: End to End Testing using Testing Agent",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Trainer workflow + LLM assistance + Analytics",
-    "status": "pending"
+    "status": "in_progress"
   },
   {
     "content": "Phase 4: OTP Auth + Role-based access + Finalization",
