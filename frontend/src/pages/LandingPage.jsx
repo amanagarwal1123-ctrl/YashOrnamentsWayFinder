@@ -223,8 +223,11 @@ export default function LandingPage() {
             </CardContent>
           </Card>
 
-          <div className="text-center mt-6">
-            <button onClick={() => navigate('/login')} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors" data-testid="staff-login-link">
+          <div className="text-center mt-6 space-y-2">
+            <button onClick={() => navigate('/tutorial')} className="text-sm text-[hsl(var(--brand))] hover:text-[hsl(var(--foreground))] transition-colors block mx-auto" data-testid="pre-session-tutorial-link">
+              ऐप गाइड / App Guide
+            </button>
+            <button onClick={() => navigate('/login')} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors block mx-auto" data-testid="staff-login-link">
               Staff Login
             </button>
           </div>
