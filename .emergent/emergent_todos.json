@@ -1,30 +1,22 @@
 [
   {
-    "content": "Fix BLOCKER: DB_NAME hardcoded fallback to 'test_database'",
+    "content": "Rebuild AdminRoutes page with full checkpoint CRUD (add/edit/delete), media upload (photo/video/arrow), AR heading config",
     "status": "completed"
   },
   {
-    "content": "Fix BLOCKER: N+1 query in admin_live_sessions",
+    "content": "Create Hindi Tutorial page (/tutorial) with role-based guides for Customer, Admin, Helpdesk, Trainer",
     "status": "completed"
   },
   {
-    "content": "Fix BLOCKER: N+1 query in admin_get_qr_sources",
+    "content": "Add Tutorial link to all role dashboards and customer pages",
     "status": "completed"
   },
   {
-    "content": "Fix BLOCKER: N+1 query in helpdesk_get_cases",
+    "content": "Troubleshoot & fix any existing app issues",
     "status": "completed"
   },
   {
-    "content": "Fix BLOCKER: N+1 query in helpdesk_get_callbacks",
-    "status": "completed"
-  },
-  {
-    "content": "Fix BLOCKER: N+1 query in admin_analytics (drop-offs)",
-    "status": "completed"
-  },
-  {
-    "content": "Re-run deployment health check",
-    "status": "completed"
+    "content": "End to End Testing",
+    "status": "in_progress"
   }
 ]

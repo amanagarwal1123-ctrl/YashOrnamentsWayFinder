@@ -26,6 +26,7 @@ import AdminMediaManagement from '@/pages/AdminMediaManagement';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
 import GoldRatePage from '@/pages/GoldRatePage';
 import GalleryPage from '@/pages/GalleryPage';
+import TutorialPage from '@/pages/TutorialPage';
 
 function App() {
   return (
@@ -62,6 +63,9 @@ function App() {
           
           {/* Helpdesk Routes */}
           <Route path="/helpdesk" element={<HelpdeskDashboard />} />
+          
+          {/* Tutorial */}
+          <Route path="/tutorial" element={<TutorialPage />} />
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

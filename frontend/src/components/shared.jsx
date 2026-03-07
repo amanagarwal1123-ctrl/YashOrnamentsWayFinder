@@ -109,6 +109,7 @@ export const AdminSidebar = ({ active }) => {
     { id: 'branding', label: 'Branding', icon: Navigation, path: '/admin/branding' },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
     { id: 'helpdesk', label: 'Helpdesk', icon: Headphones, path: '/helpdesk' },
+    { id: 'tutorial', label: 'ऐप गाइड', icon: Navigation, path: '/tutorial' },
   ];
 
   return (

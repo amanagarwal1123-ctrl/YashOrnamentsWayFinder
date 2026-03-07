@@ -157,6 +157,9 @@ export default function LandingPage() {
                   <Button variant="outline" size="sm" onClick={() => navigate('/help')} data-testid="landing-help-button">
                     <HelpCircle className="w-4 h-4 mr-1" /> Help Me
                   </Button>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/tutorial')} data-testid="landing-tutorial-button">
+                    ऐप गाइड
+                  </Button>
                 </div>
               </CardContent>
             </Card>
