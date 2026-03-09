@@ -1,18 +1,30 @@
 [
   {
-    "content": "Rebuild AdminRoutes page with full checkpoint CRUD (add/edit/delete), media upload (photo/video/arrow), AR heading config",
+    "content": "CRITICAL: Add JWT auth middleware + role guards on all /admin/* and /helpdesk/* routes",
     "status": "completed"
   },
   {
-    "content": "Create Hindi Tutorial page (/tutorial) with role-based guides for Customer, Admin, Helpdesk, Trainer",
+    "content": "CRITICAL: Fix /api/auth/me to derive user from JWT token, not query param",
     "status": "completed"
   },
   {
-    "content": "Add Tutorial link to all role dashboards and customer pages",
+    "content": "HIGH: Gate OTP bypass (admin123) behind DEV_MODE env flag",
     "status": "completed"
   },
   {
-    "content": "Troubleshoot & fix any existing app issues",
+    "content": "HIGH: Lock down CORS — strict origin allowlist, no wildcard with credentials",
+    "status": "completed"
+  },
+  {
+    "content": "MEDIUM: Support 'password' as alias for 'otp' in login schema",
+    "status": "completed"
+  },
+  {
+    "content": "LOW: Add /api/health JSON endpoint for monitoring",
+    "status": "completed"
+  },
+  {
+    "content": "Update frontend to send Authorization header on all admin/helpdesk calls",
     "status": "completed"
   },
   {

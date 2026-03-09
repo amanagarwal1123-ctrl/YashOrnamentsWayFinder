@@ -6,6 +6,28 @@ export const API = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
 
+// Attach JWT token to every request if available
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('nav_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Auto-logout on 401 responses (expired token)
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/helpdesk')) {
+      localStorage.removeItem('nav_token');
+      localStorage.removeItem('nav_user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ---- Session / Customer ----
 export const createSession = (qrCode, deviceInfo = '') =>
   API.post('/sessions/create', { qr_code: qrCode, device_info: deviceInfo });
@@ -45,7 +67,7 @@ export const whereAmI = (data) => API.post('/where-am-i', data);
 
 // ---- Auth ----
 export const login = (username, otp) => API.post('/auth/login', { username, otp });
-export const getMe = (username) => API.get(`/auth/me?username=${username}`);
+export const getMe = () => API.get('/auth/me');
 
 // ---- Admin ----
 export const adminGetSessions = (status, businessId) => {

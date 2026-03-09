@@ -20,17 +20,23 @@ export function AppProvider({ children }) {
     }
   }, [business]);
 
-  // Restore auth from localStorage
+  // Restore auth from localStorage — verify token still valid
   useEffect(() => {
     const savedUser = localStorage.getItem('nav_user');
-    if (savedUser) {
+    const savedToken = localStorage.getItem('nav_token');
+    if (savedUser && savedToken) {
       try {
         const u = JSON.parse(savedUser);
         setUser(u);
         setIsLoggedIn(true);
       } catch (e) {
         localStorage.removeItem('nav_user');
+        localStorage.removeItem('nav_token');
       }
+    } else {
+      // If either is missing, clear both
+      localStorage.removeItem('nav_user');
+      localStorage.removeItem('nav_token');
     }
   }, []);
 

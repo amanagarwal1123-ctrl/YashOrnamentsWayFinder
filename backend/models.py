@@ -242,7 +242,8 @@ class HelpdeskActionRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     username: str
-    otp: str
+    otp: str = ""
+    password: str = ""  # alias for otp (backward compat)
 
 class GoldRateUpdateRequest(BaseModel):
     rate_24k: float

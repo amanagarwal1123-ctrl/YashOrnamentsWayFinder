@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -10,6 +11,7 @@ import json
 import asyncio
 import io
 import shutil
+import jwt as pyjwt
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -47,6 +49,57 @@ db = client[os.environ['DB_NAME']]
 
 # LLM Key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# ========== Security Config ==========
+JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_urlsafe(48))
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRE_HOURS = 12
+DEV_MODE = os.environ.get('DEV_MODE', 'false').lower() == 'true'
+
+security_scheme = HTTPBearer(auto_error=False)
+
+def create_jwt(user_id: str, username: str, role: str) -> str:
+    payload = {
+        'sub': user_id,
+        'username': username,
+        'role': role,
+        'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        'iat': datetime.now(timezone.utc),
+    }
+    return pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_jwt(token: str) -> dict:
+    try:
+        return pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user_dep(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)) -> dict:
+    """Dependency: extract and validate JWT, return user dict."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    payload = decode_jwt(credentials.credentials)
+    user = await db.users.find_one({'id': payload['sub'], 'active': True}, {'_id': 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found or deactivated")
+    return serialize_doc(user)
+
+async def require_admin(user: dict = Depends(get_current_user_dep)) -> dict:
+    if user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def require_admin_or_helpdesk(user: dict = Depends(get_current_user_dep)) -> dict:
+    if user.get('role') not in ('admin', 'helpdesk'):
+        raise HTTPException(status_code=403, detail="Admin or Helpdesk access required")
+    return user
+
+async def require_admin_or_trainer(user: dict = Depends(get_current_user_dep)) -> dict:
+    if user.get('role') not in ('admin', 'trainer'):
+        raise HTTPException(status_code=403, detail="Admin or Trainer access required")
+    return user
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -354,17 +407,22 @@ async def get_business_by_slug(slug: str):
         raise HTTPException(status_code=404, detail="Business not found")
     return serialize_doc(business)
 
-# ========== AUTH: Simple JWT bypass for testing ==========
+# ========== AUTH ==========
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
     user = await db.users.find_one({'username': req.username, 'active': True})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials or user deactivated")
     
-    # Check OTP
+    # Support 'password' as alias for 'otp'
+    otp_value = req.otp or req.password
+    if not otp_value:
+        raise HTTPException(status_code=422, detail="OTP is required (use 'otp' or 'password' field)")
+    
+    # Check real OTP first
     otp = await db.otp_codes.find_one({
         'user_id': user['id'],
-        'code': req.otp,
+        'code': otp_value,
         'used': False
     })
     
@@ -377,30 +435,27 @@ async def login(req: LoginRequest):
             raise HTTPException(status_code=401, detail="OTP expired")
         # Mark OTP as used
         await db.otp_codes.update_one({'id': otp['id']}, {'$set': {'used': True}})
+    elif DEV_MODE and otp_value == 'admin123':
+        # Dev-only bypass — gated behind DEV_MODE env flag
+        logger.warning(f"DEV_MODE OTP bypass used for user '{req.username}'")
     else:
-        # Simple bypass: accept 'admin123' for testing
-        if req.otp != 'admin123':
-            raise HTTPException(status_code=401, detail="Invalid OTP")
+        raise HTTPException(status_code=401, detail="Invalid OTP")
     
-    # Generate simple token
-    token = secrets.token_urlsafe(32)
+    # Generate JWT
+    token = create_jwt(user['id'], user['username'], user['role'])
     return {
         'token': token,
         'user': serialize_doc(user)
     }
 
 @api_router.get("/auth/me")
-async def get_current_user(username: str = Query(None)):
-    if not username:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await db.users.find_one({'username': username, 'active': True}, {'_id': 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return serialize_doc(user)
+async def auth_me(user: dict = Depends(get_current_user_dep)):
+    """Return current user profile from JWT token."""
+    return user
 
 # ========== ADMIN: Sessions ==========
 @api_router.get("/admin/sessions")
-async def admin_get_sessions(status: str = "active", business_id: str = None, limit: int = 50):
+async def admin_get_sessions(status: str = "active", business_id: str = None, limit: int = 50, _user: dict = Depends(require_admin)):
     query = {}
     if status:
         query['status'] = status
@@ -410,7 +465,7 @@ async def admin_get_sessions(status: str = "active", business_id: str = None, li
     return serialize_doc(sessions)
 
 @api_router.get("/admin/sessions/live")
-async def admin_live_sessions():
+async def admin_live_sessions(_user: dict = Depends(require_admin)):
     """Get all active sessions for live map view."""
     sessions = await db.sessions.find({'status': 'active'}, {'_id': 0}).to_list(200)
     
@@ -431,7 +486,7 @@ async def admin_live_sessions():
     return result
 
 @api_router.get("/admin/sessions/{session_id}/detail")
-async def admin_session_detail(session_id: str):
+async def admin_session_detail(session_id: str, _user: dict = Depends(require_admin)):
     session = await db.sessions.find_one({'id': session_id}, {'_id': 0})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -457,7 +512,7 @@ async def admin_session_detail(session_id: str):
     }
 
 @api_router.post("/admin/sessions/{session_id}/terminate")
-async def admin_terminate_session(session_id: str, data: dict = None):
+async def admin_terminate_session(session_id: str, data: dict = None, _user: dict = Depends(require_admin)):
     reason = data.get('reason', 'admin_terminated') if data else 'admin_terminated'
     result = await db.sessions.update_one(
         {'id': session_id},
@@ -472,7 +527,7 @@ async def admin_terminate_session(session_id: str, data: dict = None):
 
 # ========== ADMIN: Stats ==========
 @api_router.get("/admin/stats")
-async def admin_stats(business_id: str = None):
+async def admin_stats(business_id: str = None, _user: dict = Depends(require_admin)):
     query = {}
     if business_id:
         query['business_id'] = business_id
@@ -503,12 +558,12 @@ async def admin_stats(business_id: str = None):
 
 # ========== ADMIN: Routes Management ==========
 @api_router.get("/admin/routes")
-async def admin_get_routes():
+async def admin_get_routes(_user: dict = Depends(require_admin)):
     routes = await db.routes.find({}, {'_id': 0}).to_list(100)
     return serialize_doc(routes)
 
 @api_router.post("/admin/routes")
-async def admin_create_route(data: dict):
+async def admin_create_route(data: dict, _user: dict = Depends(require_admin)):
     route = {
         'id': gen_id(),
         'name': data.get('name', ''),
@@ -527,7 +582,7 @@ async def admin_create_route(data: dict):
     return serialize_doc(route)
 
 @api_router.put("/admin/routes/{route_id}")
-async def admin_update_route(route_id: str, data: dict):
+async def admin_update_route(route_id: str, data: dict, _user: dict = Depends(require_admin)):
     data['updated_at'] = now_utc().isoformat()
     data.pop('id', None)
     data.pop('_id', None)
@@ -536,14 +591,14 @@ async def admin_update_route(route_id: str, data: dict):
     return serialize_doc(route)
 
 @api_router.delete("/admin/routes/{route_id}")
-async def admin_delete_route(route_id: str):
+async def admin_delete_route(route_id: str, _user: dict = Depends(require_admin)):
     await db.routes.delete_one({'id': route_id})
     await db.checkpoints.delete_many({'route_id': route_id})
     return {'status': 'deleted'}
 
 # ========== ADMIN: Checkpoints Management ==========
 @api_router.get("/admin/checkpoints")
-async def admin_get_checkpoints(route_id: str = None):
+async def admin_get_checkpoints(route_id: str = None, _user: dict = Depends(require_admin)):
     query = {}
     if route_id:
         query['route_id'] = route_id
@@ -551,7 +606,7 @@ async def admin_get_checkpoints(route_id: str = None):
     return serialize_doc(cps)
 
 @api_router.post("/admin/checkpoints")
-async def admin_create_checkpoint(data: dict):
+async def admin_create_checkpoint(data: dict, _user: dict = Depends(require_admin)):
     cp = {
         'id': gen_id(),
         'route_id': data.get('route_id', ''),
@@ -585,7 +640,7 @@ async def admin_create_checkpoint(data: dict):
     return serialize_doc(cp)
 
 @api_router.put("/admin/checkpoints/{checkpoint_id}")
-async def admin_update_checkpoint(checkpoint_id: str, data: dict):
+async def admin_update_checkpoint(checkpoint_id: str, data: dict, _user: dict = Depends(require_admin)):
     data['updated_at'] = now_utc().isoformat()
     data.pop('id', None)
     data.pop('_id', None)
@@ -594,7 +649,7 @@ async def admin_update_checkpoint(checkpoint_id: str, data: dict):
     return serialize_doc(cp)
 
 @api_router.delete("/admin/checkpoints/{checkpoint_id}")
-async def admin_delete_checkpoint(checkpoint_id: str):
+async def admin_delete_checkpoint(checkpoint_id: str, _user: dict = Depends(require_admin)):
     cp = await db.checkpoints.find_one({'id': checkpoint_id})
     if cp:
         await db.checkpoints.delete_one({'id': checkpoint_id})
@@ -604,12 +659,12 @@ async def admin_delete_checkpoint(checkpoint_id: str):
 
 # ========== ADMIN: Users ==========
 @api_router.get("/admin/users")
-async def admin_get_users():
+async def admin_get_users(_user: dict = Depends(require_admin)):
     users = await db.users.find({}, {'_id': 0}).to_list(100)
     return serialize_doc(users)
 
 @api_router.post("/admin/users")
-async def admin_create_user(data: dict):
+async def admin_create_user(data: dict, _user: dict = Depends(require_admin)):
     existing = await db.users.find_one({'username': data.get('username', '')})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -625,7 +680,7 @@ async def admin_create_user(data: dict):
     return serialize_doc(user)
 
 @api_router.put("/admin/users/{user_id}/toggle-active")
-async def admin_toggle_user(user_id: str):
+async def admin_toggle_user(user_id: str, _user: dict = Depends(require_admin)):
     user = await db.users.find_one({'id': user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -635,7 +690,7 @@ async def admin_toggle_user(user_id: str):
 
 # ========== ADMIN: OTP Generation ==========
 @api_router.post("/admin/otp/generate")
-async def admin_generate_otp(data: dict):
+async def admin_generate_otp(data: dict, _user: dict = Depends(require_admin)):
     user_id = data.get('user_id', '')
     user = await db.users.find_one({'id': user_id})
     if not user:
@@ -663,7 +718,7 @@ async def admin_generate_otp(data: dict):
 
 # ========== ADMIN: Gold Rates ==========
 @api_router.post("/admin/gold-rates")
-async def admin_update_gold_rates(req: GoldRateUpdateRequest):
+async def admin_update_gold_rates(req: GoldRateUpdateRequest, _user: dict = Depends(require_admin)):
     rate = {
         'id': gen_id(),
         'rate_24k': req.rate_24k,
@@ -677,12 +732,12 @@ async def admin_update_gold_rates(req: GoldRateUpdateRequest):
 
 # ========== ADMIN: Gallery ==========
 @api_router.get("/admin/gallery")
-async def admin_get_gallery():
+async def admin_get_gallery(_user: dict = Depends(require_admin)):
     items = await db.gallery_items.find({}, {'_id': 0}).to_list(100)
     return serialize_doc(items)
 
 @api_router.post("/admin/gallery")
-async def admin_create_gallery_item(data: dict):
+async def admin_create_gallery_item(data: dict, _user: dict = Depends(require_admin)):
     item = {
         'id': gen_id(),
         'title': data.get('title', ''),
@@ -697,13 +752,13 @@ async def admin_create_gallery_item(data: dict):
     return serialize_doc(item)
 
 @api_router.delete("/admin/gallery/{item_id}")
-async def admin_delete_gallery_item(item_id: str):
+async def admin_delete_gallery_item(item_id: str, _user: dict = Depends(require_admin)):
     await db.gallery_items.delete_one({'id': item_id})
     return {'status': 'deleted'}
 
 # ========== ADMIN: QR Sources ==========
 @api_router.get("/admin/qr-sources")
-async def admin_get_qr_sources():
+async def admin_get_qr_sources(_user: dict = Depends(require_admin)):
     sources = await db.qr_sources.find({}, {'_id': 0}).to_list(100)
     
     # Batch fetch businesses to avoid N+1
@@ -719,7 +774,7 @@ async def admin_get_qr_sources():
     return result
 
 @api_router.post("/admin/qr-sources")
-async def admin_create_qr_source(data: dict):
+async def admin_create_qr_source(data: dict, _user: dict = Depends(require_admin)):
     existing = await db.qr_sources.find_one({'code': data.get('code', '')})
     if existing:
         raise HTTPException(status_code=400, detail="QR code already exists")
@@ -738,13 +793,13 @@ async def admin_create_qr_source(data: dict):
 
 # ========== ADMIN: Businesses ==========
 @api_router.get("/admin/businesses")
-async def admin_get_businesses():
+async def admin_get_businesses(_user: dict = Depends(require_admin)):
     businesses = await db.businesses.find({}, {'_id': 0}).to_list(10)
     return serialize_doc(businesses)
 
 # ========== ADMIN: Analytics ==========
 @api_router.get("/admin/analytics")
-async def admin_analytics(business_id: str = None, days: int = 30):
+async def admin_analytics(business_id: str = None, days: int = 30, _user: dict = Depends(require_admin)):
     date_cutoff = (now_utc() - timedelta(days=days)).isoformat()
     
     query = {}
@@ -810,13 +865,13 @@ async def admin_analytics(business_id: str = None, days: int = 30):
 
 # ========== ADMIN: Audit Logs ==========
 @api_router.get("/admin/audit-logs")
-async def admin_get_audit_logs(limit: int = 50):
+async def admin_get_audit_logs(limit: int = 50, _user: dict = Depends(require_admin)):
     logs = await db.audit_logs.find({}, {'_id': 0}).sort('timestamp', -1).to_list(limit)
     return serialize_doc(logs)
 
 # ========== HELPDESK ==========
 @api_router.get("/helpdesk/cases")
-async def helpdesk_get_cases(status: str = None, business_id: str = None):
+async def helpdesk_get_cases(status: str = None, business_id: str = None, _user: dict = Depends(require_admin_or_helpdesk)):
     query = {}
     if status:
         query['status'] = status
@@ -852,7 +907,7 @@ async def helpdesk_get_cases(status: str = None, business_id: str = None):
     return result
 
 @api_router.get("/helpdesk/cases/{case_id}")
-async def helpdesk_get_case_detail(case_id: str):
+async def helpdesk_get_case_detail(case_id: str, _user: dict = Depends(require_admin_or_helpdesk)):
     case = await db.helpdesk_cases.find_one({'id': case_id}, {'_id': 0})
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
@@ -869,7 +924,7 @@ async def helpdesk_get_case_detail(case_id: str):
     }
 
 @api_router.post("/helpdesk/cases/{case_id}/action")
-async def helpdesk_case_action(case_id: str, req: HelpdeskActionRequest):
+async def helpdesk_case_action(case_id: str, req: HelpdeskActionRequest, _user: dict = Depends(require_admin_or_helpdesk)):
     case = await db.helpdesk_cases.find_one({'id': case_id})
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
@@ -904,7 +959,7 @@ async def helpdesk_case_action(case_id: str, req: HelpdeskActionRequest):
     return serialize_doc(update)
 
 @api_router.get("/helpdesk/callbacks")
-async def helpdesk_get_callbacks(status: str = None):
+async def helpdesk_get_callbacks(status: str = None, _user: dict = Depends(require_admin_or_helpdesk)):
     query = {}
     if status:
         query['status'] = status
@@ -1217,7 +1272,7 @@ async def get_placeholder_image(label: str = "Checkpoint"):
 
 # ========== ADMIN: Media Management ==========
 @api_router.get("/admin/media")
-async def admin_get_media(media_type: str = None, route_id: str = None):
+async def admin_get_media(media_type: str = None, route_id: str = None, _user: dict = Depends(require_admin)):
     query = {}
     if media_type:
         query['media_type'] = media_type
@@ -1227,7 +1282,7 @@ async def admin_get_media(media_type: str = None, route_id: str = None):
     return serialize_doc(media)
 
 @api_router.delete("/admin/media/{media_id}")
-async def admin_delete_media(media_id: str):
+async def admin_delete_media(media_id: str, _user: dict = Depends(require_admin)):
     media = await db.media_files.find_one({'id': media_id})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
@@ -1246,7 +1301,7 @@ async def admin_delete_media(media_id: str):
 
 # ========== ADMIN: Branding Settings ==========
 @api_router.get("/admin/branding")
-async def admin_get_branding():
+async def admin_get_branding(_user: dict = Depends(require_admin)):
     branding = await db.branding_settings.find_one({}, {'_id': 0})
     if not branding:
         branding = {
@@ -1264,7 +1319,7 @@ async def admin_get_branding():
     return serialize_doc(branding)
 
 @api_router.put("/admin/branding")
-async def admin_update_branding(data: dict):
+async def admin_update_branding(data: dict, _user: dict = Depends(require_admin)):
     existing = await db.branding_settings.find_one({})
     data['updated_at'] = now_utc().isoformat()
     data.pop('_id', None)
@@ -1280,7 +1335,7 @@ async def admin_update_branding(data: dict):
 
 # ========== ADMIN: QR Code Generation ==========
 @api_router.post("/admin/qr/generate")
-async def admin_generate_qr(data: dict):
+async def admin_generate_qr(data: dict, _user: dict = Depends(require_admin)):
     """Generate a QR code for AJPL or Yash Ornaments."""
     business_id = data.get('business_id', '')
     campaign = data.get('campaign', 'qr-generated')
@@ -1343,7 +1398,7 @@ async def admin_generate_qr(data: dict):
     }
 
 @api_router.get("/admin/qr/{qr_code}/image")
-async def admin_get_qr_image(qr_code: str):
+async def admin_get_qr_image(qr_code: str, _user: dict = Depends(require_admin)):
     """Serve QR code image."""
     qr_filename = f"qr_{qr_code}.png"
     qr_path = QR_DIR / qr_filename
@@ -1438,16 +1493,39 @@ async def get_public_branding():
         'app_name': branding.get('app_name', 'Yash Ornaments WayFinder'),
     }
 
+# ========== Health Check ==========
+@api_router.get("/health")
+async def health_check():
+    """JSON health endpoint for monitoring."""
+    try:
+        await db.command('ping')
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {
+        'status': 'healthy' if db_ok else 'degraded',
+        'database': 'connected' if db_ok else 'disconnected',
+        'version': '2.0.0',
+        'app': 'Yash Ornaments WayFinder',
+    }
+
 # Include router
 app.include_router(api_router)
 
 # Mount static media (with no-cache headers)
 app.mount("/media-files", StaticFiles(directory=str(WATERMARKED_DIR)), name="watermarked_media")
 
+# CORS — strict origin allowlist (no wildcard with credentials)
+_cors_raw = os.environ.get('CORS_ORIGINS', '')
+if _cors_raw and _cors_raw.strip() != '*':
+    _allowed_origins = [o.strip() for o in _cors_raw.split(',') if o.strip()]
+else:
+    _allowed_origins = ['*']
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=(_allowed_origins != ['*']),  # credentials only when not wildcard
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
