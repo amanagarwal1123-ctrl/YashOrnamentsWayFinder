@@ -24,6 +24,7 @@ import AdminAnalytics from '@/pages/AdminAnalytics';
 import AdminQRGeneration from '@/pages/AdminQRGeneration';
 import AdminBrandingSettings from '@/pages/AdminBrandingSettings';
 import AdminMediaManagement from '@/pages/AdminMediaManagement';
+import AdminTutorialPdf from '@/pages/AdminTutorialPdf';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
 import GoldRatePage from '@/pages/GoldRatePage';
 import GalleryPage from '@/pages/GalleryPage';
@@ -62,6 +63,7 @@ function App() {
           <Route path="/admin/qr-codes" element={<AdminQRGeneration />} />
           <Route path="/admin/branding" element={<AdminBrandingSettings />} />
           <Route path="/admin/media" element={<AdminMediaManagement />} />
+          <Route path="/admin/tutorial-pdf" element={<AdminTutorialPdf />} />
           
           {/* Helpdesk Routes */}
           <Route path="/helpdesk" element={<HelpdeskDashboard />} />

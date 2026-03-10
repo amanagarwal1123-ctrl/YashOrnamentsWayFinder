@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { Phone, MessageCircle, ArrowLeft, LogOut, Navigation, LayoutDashboard, Route, Users, Coins, BarChart3, Headphones, Menu, X } from 'lucide-react';
+import { Phone, MessageCircle, ArrowLeft, LogOut, Navigation, LayoutDashboard, Route, Users, Coins, BarChart3, Headphones, Menu, X, QrCode, Image, Palette, FileDown, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 
@@ -100,13 +100,14 @@ const ADMIN_NAV_ITEMS = [
   { id: 'sessions', label: 'Sessions', icon: Navigation, path: '/admin/sessions' },
   { id: 'routes', label: 'Routes', icon: Route, path: '/admin/routes' },
   { id: 'users', label: 'Users', icon: Users, path: '/admin/users' },
-  { id: 'qr-codes', label: 'QR Codes', icon: Navigation, path: '/admin/qr-codes' },
-  { id: 'media', label: 'Media', icon: Navigation, path: '/admin/media' },
+  { id: 'qr-codes', label: 'QR Codes', icon: QrCode, path: '/admin/qr-codes' },
+  { id: 'media', label: 'Media', icon: Image, path: '/admin/media' },
   { id: 'gold-rates', label: 'Gold Rates', icon: Coins, path: '/admin/gold-rates' },
-  { id: 'branding', label: 'Branding', icon: Navigation, path: '/admin/branding' },
+  { id: 'branding', label: 'Branding', icon: Palette, path: '/admin/branding' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
   { id: 'helpdesk', label: 'Helpdesk', icon: Headphones, path: '/helpdesk' },
-  { id: 'tutorial', label: 'ऐप गाइड', icon: Navigation, path: '/tutorial' },
+  { id: 'tutorial-pdf', label: 'Tutorial PDF', icon: FileDown, path: '/admin/tutorial-pdf' },
+  { id: 'tutorial', label: 'App Guide', icon: BookOpen, path: '/tutorial' },
 ];
 
 const SidebarNavContent = ({ active, items, onNavigate, onLogout, testIdPrefix = '' }) => (

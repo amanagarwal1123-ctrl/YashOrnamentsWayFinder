@@ -1685,6 +1685,18 @@ async def get_public_branding():
         'app_name': branding.get('app_name', 'Yash Ornaments WayFinder'),
     }
 
+# ========== ADMIN: Tutorial PDF Download ==========
+@api_router.get("/admin/tutorial/download")
+async def admin_download_tutorial(_user: dict = Depends(require_admin_or_trainer)):
+    """Generate and download the bilingual tutorial PDF."""
+    from tutorial_pdf import build_tutorial_pdf
+    pdf_bytes = build_tutorial_pdf()
+    return Response(
+        content=pdf_bytes,
+        media_type='application/pdf',
+        headers={'Content-Disposition': 'attachment; filename="YashOrnaments_WayFinder_Tutorial.pdf"'},
+    )
+
 # ========== Health Check ==========
 @api_router.get("/health")
 async def health_check():

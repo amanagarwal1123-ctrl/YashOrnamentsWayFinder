@@ -165,3 +165,6 @@ export const registerFromScan = (qrCode, data) => API.post(`/scan/${qrCode}/regi
 // ---- Schematic Map ----
 export const getSchematicMap = () => API.get('/map/schematic');
 
+// ---- Tutorial PDF ----
+export const downloadTutorialPdf = () => API.get('/admin/tutorial/download', { responseType: 'blob' });
+

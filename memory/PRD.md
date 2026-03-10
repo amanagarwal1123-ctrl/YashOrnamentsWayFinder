@@ -81,6 +81,14 @@ Navigation PWA guiding customers from various Chandni Chowk origins to Yash Orna
 - Trainer: trainer1 / admin123
 - Helpdesk: helpdesk1 / admin123
 
+### Tutorial PDF Generator
+- Bilingual (Hindi + English) 15-page PDF with 10 embedded screenshots
+- Covers: app scope, user roles, login, routes, checkpoints, media upload, media library, schematic map, customer flow, bug testing checklist, quick reference card
+- Written in simple language ("like teaching a 5-year-old")
+- Accessible from admin sidebar: "Tutorial PDF" page with one-click download
+- Backend: `/api/admin/tutorial/download` (admin/trainer only, helpdesk blocked)
+- Generated on-the-fly using ReportLab with FreeSans (Devanagari-capable) fonts
+
 ## Remaining / Backlog
 - **Route Preview mode**: Admin/trainer simulate customer journey without real sessions
 - **Admin map metadata editor**: Let admin fine-tune node positions in the schematic
