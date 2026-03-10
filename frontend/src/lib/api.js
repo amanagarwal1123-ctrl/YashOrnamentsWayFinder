@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 export const API = axios.create({
   baseURL: `${BACKEND_URL}/api`,
   headers: { 'Content-Type': 'application/json' }
@@ -19,7 +19,7 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/helpdesk')) {
+    if (error.response?.status === 401 && (window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/helpdesk'))) {
       localStorage.removeItem('nav_token');
       localStorage.removeItem('nav_user');
       window.location.href = '/login';
@@ -123,9 +123,10 @@ export const helpdeskGetCallbacks = (status) => API.get(`/helpdesk/callbacks${st
 // ---- LLM ----
 export const llmSuggestCheckpoint = (text, type = 'checkpoint') => API.post('/llm/suggest-checkpoint', { text, type });
 
-// SSE helper
+// SSE helper - passes JWT via query param since EventSource can't use headers
 export const createHelpdeskSSE = () => {
-  const url = `${BACKEND_URL}/api/helpdesk/notifications/stream`;
+  const token = localStorage.getItem('nav_token');
+  const url = `${BACKEND_URL}/api/helpdesk/notifications/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   return new EventSource(url);
 };
 

@@ -1,22 +1,30 @@
 [
   {
-    "content": "Update AdminSidebar to be responsive: hidden on mobile, visible on desktop",
+    "content": "Phase 1.1: Secure 4 unprotected endpoints with JWT role checks",
     "status": "completed"
   },
   {
-    "content": "Add mobile admin header with hamburger menu that opens Sheet drawer",
+    "content": "Phase 1.2: Fix trainer role access to route/checkpoint CRUD APIs",
     "status": "completed"
   },
   {
-    "content": "Ensure all admin pages work correctly with the responsive sidebar",
+    "content": "Phase 1.3: Fix route publish logic (create→publish→visible)",
     "status": "completed"
   },
   {
-    "content": "Check helpdesk dashboard and other pages for mobile issues",
+    "content": "Phase 1.4: Fix logic bugs (where-am-i, analytics days, 404 returns)",
     "status": "completed"
   },
   {
-    "content": "Test on mobile viewport and verify collapsing behavior",
+    "content": "Phase 1.5: Fix frontend interceptor + BACKEND_URL fallback",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 1.6: Dependency cleanup (date-fns ^3.6.0, ForkTsChecker removal, lockfile)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 1.7: Validation report - ALL 28 CHECKS GREEN",
     "status": "completed"
   }
 ]

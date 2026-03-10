@@ -38,6 +38,12 @@ let webpackConfig = {
     },
     configure: (webpackConfig) => {
 
+      // Remove fork-ts-checker-webpack-plugin (we don't use TypeScript)
+      // This avoids the ajv/ajv-keywords/schema-utils conflict
+      webpackConfig.plugins = webpackConfig.plugins.filter(
+        (plugin) => plugin.constructor.name !== 'ForkTsCheckerWebpackPlugin'
+      );
+
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
           ...webpackConfig.watchOptions,

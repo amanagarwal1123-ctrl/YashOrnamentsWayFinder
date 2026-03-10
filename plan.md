@@ -4,19 +4,21 @@
 - Deliver a mobile-first PWA that provides **checkpoint-based navigation** to a shared destination, where **QR scan selects business identity** (AJPL vs Yash) and enforces strict feature/data segregation.
 - Provide a proven end-to-end core flow: **QR → business-branded landing → route select → checkpoint navigation → help/callback → helpdesk visibility**.
 - Enable internal operations with Admin + Helpdesk dashboards and seed data suitable for later replacement by Map Trainers.
-- Implement **Map Trainer workflow** for creating/updating routes and checkpoints with **LLM-assisted suggestions (OpenAI via Emergent key)** under strict rules:
+- Implement **Map Trainer workflow** for creating/updating routes and checkpoints with **LLM-assisted suggestions** under strict rules:
   - LLM used only as an assistant during route training
   - **Never auto-overwrite trainer input**
   - **Human review/approval required** (Trainer/Admin)
   - Store suggestion history + approvals in **audit logs**
 - Deliver **business-segmented analytics** (AJPL vs Yash vs combined) and operational monitoring.
 - Ensure **mobile usability across internal dashboards** (Admin/Trainer/Helpdesk) so operations work smoothly from phones.
+- Prepare the product for production by completing a **production hardening pass** with security, correctness, frontend stability, and deterministic builds.
 
-**Status update:**
-- **Phase 1 complete:** LLM integration verified end-to-end.
-- **Phase 2 complete:** V1 app delivered; all 5 MVP user stories passing; testing at **Backend 100%**, **Frontend 95%** with the minor issue fixed (MapPin import).
-- **Mobile admin UX fix complete:** Admin menus now behave correctly on mobile (sidebar collapses into a Sheet drawer with a hamburger header); desktop unchanged.
-- **Now starting Phase 3:** Trainer workflow + in-product LLM assistance + Analytics V1.
+**Status update (current):**
+- **Core POC complete:** LLM integration verified end-to-end.
+- **V1 complete:** Core customer navigation, Helpdesk, Admin dashboards delivered.
+- **Mobile admin UX hardening complete:** Admin menus behave correctly on mobile (sidebar collapses into a Sheet drawer with a hamburger header); desktop unchanged.
+- **Phase 1 Production Hardening complete:** all mandatory fixes implemented and **validation fully green (28/28 checks passed)** on **Node 20 LTS**.
+- **Next focus:** **Phase 2 — Admin Route CMS** is now unblocked and ready to begin.
 
 ---
 
@@ -36,11 +38,11 @@
 2) **PWA Offline POC** ⏸️ Deferred
 - Deferred to a later hardening iteration (core navigation currently online-first with placeholders).
 
-3) **Helpdesk Notification POC** ⏸️ Partially covered
-- Implemented **SSE fallback** real-time notifications path for helpdesk dashboard.
+3) **Helpdesk Notification POC** ✅ Completed (SSE)
+- Implemented **SSE** real-time notifications path for helpdesk dashboard.
 - Browser Push Notifications remain planned for Phase 4 hardening.
 
-**Exit criteria (POC):** ✅ Met for LLM integration.
+**Exit criteria (POC):** ✅ Met.
 
 ---
 
@@ -56,7 +58,7 @@
 
 **Delivered build steps (V1)** ✅
 1) **Data model + seed data**
-- Seeded: 2 businesses, 4 QR sources, 5 routes, 27 checkpoints, 3 internal users.
+- Seeded: 2 businesses, 4 QR sources, 5 routes, 27 checkpoints, internal users.
 - Placeholder checkpoints designed to be replaceable by trainers later.
 - Strict `business_id` tagging on sessions/events/cases/callbacks.
 
@@ -90,8 +92,6 @@
 
 7) **Testing**
 - Automated + manual verification.
-- Backend API success: 100%.
-- Frontend success: 95% → minor JS import bug fixed.
 
 8) **Mobile Admin Responsiveness Hardening** ✅
 - Fixed admin menu behavior on phones:
@@ -105,109 +105,156 @@
 
 ---
 
-### Phase 3 — Feature Expansion (Trainer workflow + LLM assistance + Analytics V1) 🚧 IN PROGRESS
-**Goal:** productionize route training workflows and analytics while preserving strict human approval and auditability.
+### Phase 1 — Production Hardening Pass (No behavior change intended) ✅ COMPLETED
+**Goal:** production readiness via security, correctness fixes, frontend stability, and deterministic builds.
 
-**User stories (Phase 3)**
-1. As a **Map Trainer**, I can draft routes/checkpoints, upload/replace media, and submit for review.
-2. As a **Trainer/Admin**, I can click **Generate Suggestions** to get LLM outputs for checkpoint titles, instructions, route summary, warnings.
-3. LLM suggestions **never overwrite** trainer text; Trainer/Admin must explicitly accept edits.
-4. As an **Admin**, I can review trainer drafts and publish routes/checkpoints.
-5. As an **Admin**, I can view **business-segmented analytics** (AJPL vs Yash vs combined).
+**Constraints:**
+- Do not intentionally change product behavior (except bug/security fixes).
+- Target runtime: **Node 20 LTS** for CRA/CRACO stability.
 
-**Build steps (Phase 3)**
-1) **Route/Checkpoint Draft + Review Workflow**
-- Add entities/fields for:
-  - route status lifecycle: `draft → pending_review → published → archived`
-  - checkpoint versioning (keep published stable while edits are in draft)
-- Admin review UI:
-  - diff-style view (current vs proposed)
-  - approve/reject with comments
-- Ensure all changes are recorded in `audit_logs`.
+#### Phase 1.1 — Security Hardening (JWT role checks) ✅
+Secured unprotected endpoints with JWT role enforcement:
+- `POST /api/media/upload` → **admin or trainer only**
+- `GET /api/media/{id}/serve?original=true` → **admin only** for originals; watermarked remains public
+- `GET /api/helpdesk/notifications/stream` → **admin/helpdesk only** (SSE auth)
+  - Implemented token passing via `?token=` for EventSource compatibility
+- `POST /api/llm/suggest-checkpoint` → **admin/trainer only**
 
-2) **Trainer Console (UI)**
-- Trainer route list (drafts + published).
-- Checkpoint editor:
-  - text fields + media placeholders
-  - replace media uploads (photo/video/arrow maps)
-- “Submit for review” action.
+**Exit criteria:** ✅ anonymous rejected with 401; wrong-role rejected with 403.
 
-3) **LLM Assistance (in-product)**
-- Add **Generate Suggestions** button on:
-  - checkpoint editing
-  - route review (summary)
-- Backend:
-  - extend `/api/llm/suggest-checkpoint` usage to include:
-    - checkpoint title suggestions
-    - improved instructions
-    - route summaries
-    - warning/landmark suggestions
-- UI:
-  - show suggestions side-by-side with trainer text
-  - “Apply suggestion” requires explicit click and creates audit entry
-- **Audit logging requirements**:
-  - store original trainer text
-  - store full suggestion history (prompt type, raw response, parsed suggestion)
-  - store reviewer decision (accepted/rejected/edited)
+#### Phase 1.2 — Role Alignment (Trainer vs Admin) ✅
+- Trainers routed to `/admin/routes` after login.
+- Updated backend dependencies so **trainer can manage routes/checkpoints**:
+  - `GET/POST/PUT /api/admin/routes` (trainer allowed)
+  - `GET/POST/PUT/DELETE /api/admin/checkpoints` (trainer allowed)
+- Trainer remains blocked from admin-only APIs (sessions/users/stats/analytics).
+- Route deletion remains **admin-only**.
 
-4) **Analytics V1 (segmented)**
-- Admin analytics tabs: All / AJPL / Yash.
-- Metrics:
-  - scans → route starts → checkpoint confirmations → completion
-  - drop-off/“cannot find” hotspot checkpoints
-  - helpdesk KPIs: cases, resolution rate, response time (basic)
-- AJPL-only metrics:
-  - gold rate views
-  - gallery opens
-  - calculator usage
+**Exit criteria:** ✅ trainer CRUD works; admin-only endpoints return 403.
 
-5) **Operational hardening for Phase 3**
-- Enforce business segregation on analytics queries.
-- Add additional indexes for analytics performance.
+#### Phase 1.3 — Route Publish Logic Reliability ✅
+- Verified create → publish → visible on customer `/routes`.
+- Verified unpublish → disappears from customer `/routes`.
+- Ensured public `/api/routes` remains `status: published` only.
 
-6) **Phase 3 testing**
-- Trainer draft creation → LLM suggestions generated → manual apply → submit for review → admin approves → published route appears for customers.
+**Exit criteria:** ✅ end-to-end publish/unpublish works without DB edits.
+
+#### Phase 1.4 — Correctness Bug Fixes ✅
+- **Where Am I** now filters checkpoints by the session’s selected `route_id`.
+- **Admin analytics** now applies the `days` filter to:
+  - sessions counts (created_at)
+  - session events (timestamp)
+  - helpdesk cases (created_at)
+- Update/delete operations now return **404 when id not found** for:
+  - routes update/delete
+  - checkpoints update/delete
+  - gallery delete
+  - session terminate uses a pre-check to avoid false 404s
+
+**Exit criteria:** ✅ verified via tests.
+
+#### Phase 1.5 — Frontend Stability & Env Safety ✅
+- Fixed API interceptor precedence for 401 auto-logout:
+  - `401 && (pathname startsWith /admin || /helpdesk)`
+- Added EventSource SSE token query-param support.
+- Added safe fallback handling for missing backend URL (`REACT_APP_BACKEND_URL`).
+
+**Exit criteria:** ✅ no accidental logout triggers; SSE works with auth.
+
+#### Phase 1.6 — Dependency & Build Determinism ✅
+- Kept `react-day-picker` v8.
+- Pinned `date-fns` to `^3.6.0` for compatibility.
+- Resolved CRA build break (ajv/ajv-keywords/schema-utils) by removing `ForkTsCheckerWebpackPlugin` in CRACO config (TypeScript checker not needed).
+- Regenerated lockfile deterministically.
+
+**Exit criteria:** ✅ `yarn install` and `yarn build` succeed on Node 20 LTS.
+
+#### Phase 1.7 — Validation Report (Gate to Phase 2) ✅
+**Result: 28/28 checks green**
+- Node: v20.20.0
+- Build: PASS
+- Protected endpoints: anonymous 401, wrong-role 403
+- Trainer route/checkpoint CRUD: PASS
+- Publish flow: PASS
+- where-am-i route scoping: PASS
+- analytics days filter: PASS
+- 404 on missing IDs: PASS
+
+**Exit criteria:** ✅ met; Phase 2 is unblocked.
 
 ---
 
-### Phase 4 — Auth + Push Notifications + Offline/PWA Hardening + Finalization ⏳ PLANNED
-**Goal:** secure internal operations and complete production-grade user experience.
+### Phase 2 — Admin Route CMS (Ready to Begin) ⏳ PLANNED
+**Goal:** make route/checkpoint operations non-technical-staff friendly.
 
-**User stories (Phase 4)**
-1. Admin can generate OTPs (expire after 2 hours or on use).
-2. Helpdesk/Trainer can log in via username+OTP and are role-restricted.
-3. Admin can deactivate users instantly.
-4. Push notifications (primary) + SSE fallback for helpdesk.
-5. Offline-first PWA caching for routes/checkpoints/media + queued event sync.
+**Scope (Phase 2)**
+1) **Full route CRUD**
+- Create, edit, publish/unpublish, archive, delete, duplicate route
+- Editable fields: name, start_type, start_label, difficulty, ETA, status
+- Include `start_type` option: **gurudwara**
 
-**Build steps (Phase 4)**
-- Replace current login bypass with real OTP enforcement.
-- Role-based guards on admin/helpdesk/trainer routes.
-- Implement Browser Push Notifications subscription + server send (retain SSE fallback).
-- Service worker caching strategy:
-  - cache routes/checkpoints JSON
-  - cache media thumbnails
-  - store offline event queue and sync on reconnect
-- Regression testing across both business identities.
+2) **Full checkpoint CRUD**
+- Add/edit/delete/reorder checkpoints via drag-and-drop
+- Inline validation for required fields
+
+3) **Bulk operations**
+- Duplicate checkpoint
+- Reorder and save all
+- Import/export route JSON
+
+4) **Safety + UX hardening**
+- Confirm dialogs for destructive actions
+- Clear toast/error messages (remove silent catches)
+- Ensure customer-facing `/routes` only shows published routes
+
+**Exit criteria:**
+- Admin can fully maintain routes without touching the database.
+- No silent failures on 401/403/404/500.
+- Trainer can manage routes/checkpoints but not admin-only pages.
+
+---
+
+### Phase 3 — Media Management UX (Deferred until Phase 2 complete) ⏳ PLANNED
+**Goal:** admins can upload/manage photo/video media quickly and safely.
+
+(Starts after Phase 2 completion.)
+
+---
+
+### Phase 4 — Multi-Origin Schematic Map (Deferred until Phase 2/3 complete) ⏳ PLANNED
+**Goal:** metro-style multi-origin map experience for AJPL Wayfinder.
+
+**Data source constraint:** map routes/checkpoints are sourced from MongoDB; seed/migrate canonical origin routes (including **Gurudwara**) and store schematic metadata in DB (no hardcoded JSX layout).
+
+(Starts after Phase 2/3 completion.)
 
 ---
 
 ## 3. Next Actions
-1. Implement Phase 3 **Trainer workflow** pages (draft/edit/submit).
-2. Add in-product **LLM suggestion UI** (Generate Suggestions + review/approve + audit history).
-3. Expand analytics endpoints + UI to support segmented metrics and hotspot checkpoints.
-4. Add structured audit log entries for:
-   - trainer edits
-   - LLM suggestion generation
-   - admin approvals/rejections
+1) Begin **Phase 2 — Admin Route CMS** implementation.
+2) Add admin UX improvements with clear validation and no silent catches.
+3) After Phase 2 is shipped, start Phase 3 (Media Management), then Phase 4 (Schematic Map).
 
 ---
 
 ## 4. Success Criteria
-- **Business segregation:** AJPL-only features never appear in Yash sessions (UI + API + analytics).
-- **Navigation reliability:** users can complete the route using checkpoint visuals; core flow remains usable under weak GPS/network.
-- **Assistance responsiveness:** helpdesk receives help requests (SSE now; Push in Phase 4) and can resolve with action logs.
-- **Trainer + LLM compliance:** suggestions generated on demand, never overwrite trainer text; approvals + history persisted in audit logs.
-- **Operational visibility:** Admin can monitor live sessions (red AJPL / blue Yash), review timelines, and see segmented analytics.
-- **AJPL gold rates:** manually managed by admin with “last updated” timestamp; never shown in Yash sessions.
-- **Mobile operations readiness:** internal Admin/Trainer workflows remain usable on phones (menus collapse and do not block content).
+**Phase 1 (gate criteria):** ✅ Completed
+- `yarn install` and `yarn build` succeed on **Node 20 LTS**.
+- Protected endpoints reject anonymous access (401) and wrong role (403).
+- Trainer can manage routes/checkpoints but cannot access admin-only APIs/pages.
+- Route create/edit/publish/unpublish flow works end-to-end.
+- where-am-i results are route-scoped.
+- analytics `days` filter applies to all relevant queries.
+- update/delete APIs return 404 on missing ids.
+- Lockfile deterministic after cleanup.
+
+**Phase 2 (next criteria):**
+- Admin can fully maintain routes/checkpoints without DB edits.
+- Customer `/routes` shows published routes only.
+- Non-technical staff can reorder checkpoints and publish safely.
+- No silent failures; errors surfaced clearly.
+
+**Overall product criteria (unchanged):**
+- Business segregation enforced (AJPL-only features never appear in Yash sessions).
+- Navigation reliability maintained.
+- Mobile operations readiness maintained (menus collapse and do not block content).

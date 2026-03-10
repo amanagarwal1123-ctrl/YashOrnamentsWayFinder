@@ -514,14 +514,13 @@ async def admin_session_detail(session_id: str, _user: dict = Depends(require_ad
 @api_router.post("/admin/sessions/{session_id}/terminate")
 async def admin_terminate_session(session_id: str, data: dict = None, _user: dict = Depends(require_admin)):
     reason = data.get('reason', 'admin_terminated') if data else 'admin_terminated'
-    result = await db.sessions.update_one(
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.sessions.update_one(
         {'id': session_id},
         {'$set': {'status': 'terminated', 'last_activity': now_utc().isoformat()}}
     )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    session = await db.sessions.find_one({'id': session_id})
     await log_event(session_id, session.get('business_id', ''), 'session_terminated', {'reason': reason})
     return {'status': 'terminated'}
 
@@ -558,12 +557,12 @@ async def admin_stats(business_id: str = None, _user: dict = Depends(require_adm
 
 # ========== ADMIN: Routes Management ==========
 @api_router.get("/admin/routes")
-async def admin_get_routes(_user: dict = Depends(require_admin)):
+async def admin_get_routes(_user: dict = Depends(require_admin_or_trainer)):
     routes = await db.routes.find({}, {'_id': 0}).to_list(100)
     return serialize_doc(routes)
 
 @api_router.post("/admin/routes")
-async def admin_create_route(data: dict, _user: dict = Depends(require_admin)):
+async def admin_create_route(data: dict, _user: dict = Depends(require_admin_or_trainer)):
     route = {
         'id': gen_id(),
         'name': data.get('name', ''),
@@ -582,23 +581,27 @@ async def admin_create_route(data: dict, _user: dict = Depends(require_admin)):
     return serialize_doc(route)
 
 @api_router.put("/admin/routes/{route_id}")
-async def admin_update_route(route_id: str, data: dict, _user: dict = Depends(require_admin)):
+async def admin_update_route(route_id: str, data: dict, _user: dict = Depends(require_admin_or_trainer)):
     data['updated_at'] = now_utc().isoformat()
     data.pop('id', None)
     data.pop('_id', None)
-    await db.routes.update_one({'id': route_id}, {'$set': data})
+    result = await db.routes.update_one({'id': route_id}, {'$set': data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Route not found")
     route = await db.routes.find_one({'id': route_id}, {'_id': 0})
     return serialize_doc(route)
 
 @api_router.delete("/admin/routes/{route_id}")
 async def admin_delete_route(route_id: str, _user: dict = Depends(require_admin)):
-    await db.routes.delete_one({'id': route_id})
+    result = await db.routes.delete_one({'id': route_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Route not found")
     await db.checkpoints.delete_many({'route_id': route_id})
     return {'status': 'deleted'}
 
 # ========== ADMIN: Checkpoints Management ==========
 @api_router.get("/admin/checkpoints")
-async def admin_get_checkpoints(route_id: str = None, _user: dict = Depends(require_admin)):
+async def admin_get_checkpoints(route_id: str = None, _user: dict = Depends(require_admin_or_trainer)):
     query = {}
     if route_id:
         query['route_id'] = route_id
@@ -606,7 +609,7 @@ async def admin_get_checkpoints(route_id: str = None, _user: dict = Depends(requ
     return serialize_doc(cps)
 
 @api_router.post("/admin/checkpoints")
-async def admin_create_checkpoint(data: dict, _user: dict = Depends(require_admin)):
+async def admin_create_checkpoint(data: dict, _user: dict = Depends(require_admin_or_trainer)):
     cp = {
         'id': gen_id(),
         'route_id': data.get('route_id', ''),
@@ -640,21 +643,24 @@ async def admin_create_checkpoint(data: dict, _user: dict = Depends(require_admi
     return serialize_doc(cp)
 
 @api_router.put("/admin/checkpoints/{checkpoint_id}")
-async def admin_update_checkpoint(checkpoint_id: str, data: dict, _user: dict = Depends(require_admin)):
+async def admin_update_checkpoint(checkpoint_id: str, data: dict, _user: dict = Depends(require_admin_or_trainer)):
     data['updated_at'] = now_utc().isoformat()
     data.pop('id', None)
     data.pop('_id', None)
-    await db.checkpoints.update_one({'id': checkpoint_id}, {'$set': data})
+    result = await db.checkpoints.update_one({'id': checkpoint_id}, {'$set': data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
     cp = await db.checkpoints.find_one({'id': checkpoint_id}, {'_id': 0})
     return serialize_doc(cp)
 
 @api_router.delete("/admin/checkpoints/{checkpoint_id}")
-async def admin_delete_checkpoint(checkpoint_id: str, _user: dict = Depends(require_admin)):
+async def admin_delete_checkpoint(checkpoint_id: str, _user: dict = Depends(require_admin_or_trainer)):
     cp = await db.checkpoints.find_one({'id': checkpoint_id})
-    if cp:
-        await db.checkpoints.delete_one({'id': checkpoint_id})
-        count = await db.checkpoints.count_documents({'route_id': cp['route_id']})
-        await db.routes.update_one({'id': cp['route_id']}, {'$set': {'checkpoint_count': count}})
+    if not cp:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    await db.checkpoints.delete_one({'id': checkpoint_id})
+    count = await db.checkpoints.count_documents({'route_id': cp['route_id']})
+    await db.routes.update_one({'id': cp['route_id']}, {'$set': {'checkpoint_count': count}})
     return {'status': 'deleted'}
 
 # ========== ADMIN: Users ==========
@@ -753,7 +759,9 @@ async def admin_create_gallery_item(data: dict, _user: dict = Depends(require_ad
 
 @api_router.delete("/admin/gallery/{item_id}")
 async def admin_delete_gallery_item(item_id: str, _user: dict = Depends(require_admin)):
-    await db.gallery_items.delete_one({'id': item_id})
+    result = await db.gallery_items.delete_one({'id': item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Gallery item not found")
     return {'status': 'deleted'}
 
 # ========== ADMIN: QR Sources ==========
@@ -802,17 +810,17 @@ async def admin_get_businesses(_user: dict = Depends(require_admin)):
 async def admin_analytics(business_id: str = None, days: int = 30, _user: dict = Depends(require_admin)):
     date_cutoff = (now_utc() - timedelta(days=days)).isoformat()
     
-    query = {}
+    query = {'created_at': {'$gte': date_cutoff}}
     if business_id:
         query['business_id'] = business_id
     
-    # Total sessions
+    # Total sessions (within date range)
     total = await db.sessions.count_documents(query)
     completed = await db.sessions.count_documents({**query, 'status': 'completed'})
     abandoned = await db.sessions.count_documents({**query, 'status': 'abandoned'})
     
-    # Events breakdown
-    event_query = {}
+    # Events breakdown (within date range)
+    event_query = {'timestamp': {'$gte': date_cutoff}}
     if business_id:
         event_query['business_id'] = business_id
     
@@ -824,7 +832,7 @@ async def admin_analytics(business_id: str = None, days: int = 30, _user: dict =
     async for doc in db.session_events.aggregate(pipeline):
         event_counts[doc['_id']] = doc['count']
     
-    # Top drop-off checkpoints (with $lookup to avoid N+1)
+    # Top drop-off checkpoints (within date range, with $lookup to avoid N+1)
     drop_off_pipeline = [
         {'$match': {**event_query, 'event_type': 'cannot_find'}},
         {'$group': {'_id': '$checkpoint_id', 'count': {'$sum': 1}}},
@@ -847,9 +855,12 @@ async def admin_analytics(business_id: str = None, days: int = 30, _user: dict =
             'count': doc['count']
         })
     
-    # Helpdesk stats
-    help_total = await db.helpdesk_cases.count_documents({} if not business_id else {'business_id': business_id})
-    help_resolved = await db.helpdesk_cases.count_documents({**({} if not business_id else {'business_id': business_id}), 'status': 'resolved'})
+    # Helpdesk stats (within date range)
+    help_query = {'created_at': {'$gte': date_cutoff}}
+    if business_id:
+        help_query['business_id'] = business_id
+    help_total = await db.helpdesk_cases.count_documents(help_query)
+    help_resolved = await db.helpdesk_cases.count_documents({**help_query, 'status': 'resolved'})
     
     return {
         'total_sessions': total,
@@ -982,8 +993,23 @@ async def helpdesk_get_callbacks(status: str = None, _user: dict = Depends(requi
 
 # ========== HELPDESK: SSE Notifications ==========
 @api_router.get("/helpdesk/notifications/stream")
-async def helpdesk_sse_stream(request: Request):
-    """SSE endpoint for helpdesk real-time notifications."""
+async def helpdesk_sse_stream(request: Request, token: str = Query(None), credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
+    """SSE endpoint for helpdesk real-time notifications. Accepts JWT via query param or Authorization header."""
+    # SSE connections can't easily use Authorization header, so accept token via query param too
+    jwt_token = None
+    if credentials:
+        jwt_token = credentials.credentials
+    elif token:
+        jwt_token = token
+    
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    payload = decode_jwt(jwt_token)
+    user = await db.users.find_one({'id': payload['sub'], 'active': True})
+    if not user or user.get('role') not in ('admin', 'helpdesk'):
+        raise HTTPException(status_code=403, detail="Admin or Helpdesk access required")
+    
     queue = asyncio.Queue()
     helpdesk_clients.append(queue)
     
@@ -996,7 +1022,7 @@ async def helpdesk_sse_stream(request: Request):
                     notification = await asyncio.wait_for(queue.get(), timeout=30)
                     yield f"data: {json.dumps(notification)}\n\n"
                 except asyncio.TimeoutError:
-                    yield f": keepalive\n\n"
+                    yield ": keepalive\n\n"
         finally:
             helpdesk_clients.remove(queue)
     
@@ -1012,7 +1038,7 @@ async def helpdesk_sse_stream(request: Request):
 
 # ========== LLM: Generate Suggestions ==========
 @api_router.post("/llm/suggest-checkpoint")
-async def llm_suggest_checkpoint(data: dict):
+async def llm_suggest_checkpoint(data: dict, _user: dict = Depends(require_admin_or_trainer)):
     """Generate LLM suggestions for checkpoint text."""
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="LLM key not configured")
@@ -1095,8 +1121,15 @@ async def where_am_i(data: dict):
     lng = data.get('lng', 0)
     session_id = data.get('session_id', '')
     
-    # Simple matching: search checkpoints for matching terms
-    all_checkpoints = await db.checkpoints.find({}, {'_id': 0}).to_list(200)
+    # Scope checkpoints to the session's selected route
+    cp_query = {}
+    if session_id:
+        session = await db.sessions.find_one({'id': session_id})
+        route_id = session.get('route_id', '') if session else ''
+        if route_id:
+            cp_query['route_id'] = route_id
+    
+    all_checkpoints = await db.checkpoints.find(cp_query, {'_id': 0}).to_list(200)
     
     matches = []
     search_terms = description.lower().split() + [h.lower() for h in hints]
@@ -1138,6 +1171,7 @@ async def upload_media(
     checkpoint_id: str = Form(""),
     media_type: str = Form("checkpoint_image"),  # checkpoint_image, arrow_map, route_image, route_video
     uploaded_by: str = Form(""),
+    _user: dict = Depends(require_admin_or_trainer),
 ):
     """Upload media with automatic watermarking."""
     if not file.filename:
@@ -1205,8 +1239,17 @@ async def upload_media(
     return serialize_doc(media_doc)
 
 @api_router.get("/media/{media_id}/serve")
-async def serve_media(media_id: str, original: bool = False):
+async def serve_media(media_id: str, original: bool = False, credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
     """Serve watermarked media (or original for admin preview)."""
+    # Auth check FIRST for original media requests
+    if original:
+        if not credentials:
+            raise HTTPException(status_code=401, detail="Authentication required for original media")
+        payload = decode_jwt(credentials.credentials)
+        user = await db.users.find_one({'id': payload['sub'], 'active': True})
+        if not user or user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required for original media")
+    
     media = await db.media_files.find_one({'id': media_id})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
