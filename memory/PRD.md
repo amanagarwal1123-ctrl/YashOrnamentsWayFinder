@@ -1,101 +1,98 @@
 # Yash Ornaments WayFinder - Product Requirements Document
 
 ## Overview
-A navigation PWA that guides customers from various origin points in Chandni Chowk, Delhi to Yash Ornaments / AJPL jewellery stores. Features QR-code-driven session creation, step-by-step checkpoint navigation, helpdesk support, and admin management tools.
+Navigation PWA guiding customers from various Chandni Chowk origins to Yash Ornaments / AJPL. QR-driven sessions, step-by-step checkpoint navigation, helpdesk support, admin CMS, media management, and schematic map visualization.
 
 ## Tech Stack
 - **Backend**: FastAPI (Python) on port 8001
 - **Frontend**: React (CRA + Craco) on port 3000
 - **Database**: MongoDB (motor driver)
-- **Auth**: JWT with role-based access (admin, helpdesk, trainer)
-- **Package Manager**: yarn (with yarn.lock committed)
-- **3rd Party**: OpenAI GPT via Emergent LLM Key for checkpoint text suggestions
+- **Auth**: JWT with RBAC (admin, helpdesk, trainer)
+- **Package Manager**: yarn (yarn.lock committed, no npm lockfile)
+- **3rd Party**: OpenAI GPT via Emergent LLM Key
 
-## Users / Roles
-- **Admin**: Full access to all features
-- **Trainer**: Route/checkpoint/media authoring (no user management, no route deletion)
-- **Helpdesk**: Case management, callback handling
-- **Customer**: Public navigation flow via QR scan
+## Roles
+- **Admin**: Full access
+- **Trainer**: Route/checkpoint/media authoring (no user mgmt, no route deletion, no media deletion)
+- **Helpdesk**: Case management
+- **Customer**: Public navigation
 
-## Core Requirements
-1. QR code scan -> session creation -> route selection -> checkpoint-by-checkpoint navigation -> arrival
-2. Multiple origin routes converging to a single destination (Yash Complex, 5th Floor)
-3. Admin CMS for route/checkpoint lifecycle management
-4. Helpdesk real-time notifications (SSE) for customer assistance
-5. Media management with automatic watermarking
-6. Gold rate display, gallery (AJPL-specific features)
+## What's Implemented
 
-## Data Model
-- **Businesses**: AJPL (retail), Yash Ornaments (wholesale)
-- **Routes**: 6 published origins (Metro, Red Fort, Omaxe, Town Hall, Building Entrance, Gurudwara)
-- **Checkpoints**: Ordered steps per route with media, directions, risk levels
-- **Sessions**: Customer navigation tracking
-- **QR Sources**: Business-linked QR codes with campaigns
-
-## What's Been Implemented
-
-### Phase 1 (Previous Session): Hardening & Dependencies
-- Secured all endpoints with JWT role checks
-- Fixed route-scoping in where-am-i
-- Fixed date filter in analytics
-- Resolved date-fns/react-day-picker and ajv build conflicts
+### Phase 1 + 1R: Hardening & Reproducibility
+- JWT role-based endpoint security, fail-fast JWT_SECRET in production
+- Clean `yarn install --frozen-lockfile` + `yarn build` pipeline
+- Proper `pytest.skip()` for optional deps in test_core_llm.py
 - Responsive admin sidebar (Sheet component for mobile)
+- date-fns/ajv dependency conflicts resolved
 
-### Phase 1R (Current Session): Reproducibility + Bug Closure
-- JWT_SECRET fails fast in production if not set (DEV_MODE only allows random fallback)
-- Test harness portability: test_core_llm.py uses relative paths, graceful skip for missing deps
-- backend_test.py cleaned for cross-platform safety (no emoji encoding issues)
-- Build verified: `yarn install --frozen-lockfile` + `yarn build` succeed cleanly
+### Phase 2: Admin Route CMS
+- Full Route CRUD: create, edit, publish/unpublish/archive, delete, duplicate
+- Route JSON export/import
+- Checkpoint CRUD with field-level validation
+- Drag-and-drop reorder via @dnd-kit (persisted via API)
+- Checkpoint duplicate
+- AlertDialog confirmations for all destructive actions
+- Role enforcement: admin-only route deletion
+- Gurudwara added as 6th origin with 6 checkpoints
 
-### Phase 2 (Current Session): Admin Route CMS
-- **Full Route CRUD**: Create, edit, publish, unpublish, archive, delete with UI forms
-- **Route Operations**: Duplicate (creates draft copy), Export JSON, Import JSON
-- **Checkpoint CRUD**: Add/edit/delete with field-level validation
-- **Drag-and-Drop Reorder**: @dnd-kit sortable checkpoints, persisted via API
-- **Checkpoint Duplicate**: Creates copy at next order position
-- **Confirmation Dialogs**: AlertDialog for all destructive actions
-- **Inline Validation**: Route name required, checkpoint name + instruction required
-- **Role Enforcement**: Only admin can delete routes; trainer can create/edit
-- **Gurudwara Route**: Added as 6th published origin with 6 checkpoints
-- **start_type**: Now includes 'gurudwara' in dropdown options
+### Phase 3: Media UX & Management
+- Drag-and-drop multi-file upload zone
+- Multi-file queue with per-file progress, retry, cancel
+- File type/size validation (50MB max, images + videos only)
+- Media library with search, type filter, route filter
+- Grid and list view toggle
+- Lazy-loaded thumbnails, watermark badges
+- AlertDialog for delete confirmation
+- Trainers can upload but cannot delete (admin-only)
 
-### New Backend Endpoints (Phase 2)
-- `POST /api/admin/routes/{id}/duplicate` - Duplicate route + checkpoints
-- `GET /api/admin/routes/{id}/export` - Export route as JSON
-- `POST /api/admin/routes/import` - Import route from JSON
-- `POST /api/admin/checkpoints/reorder` - Bulk reorder checkpoints
-- `POST /api/admin/checkpoints/{id}/duplicate` - Duplicate single checkpoint
+### Phase 4: Multi-Origin Schematic Map
+- DB-driven schematic map auto-generated from published routes
+- Metro-style SVG rendering: 5 origins (Metro, Red Fort, Omaxe, Town Hall, Gurudwara) converging to destination
+- Route selector dropdown + legend buttons for switching
+- Current checkpoint highlighting with pulse animation
+- Completed segment tracking
+- List-view fallback for accessibility
+- Public endpoint: `/api/map/schematic`
+- Customer page: `/schematic`
 
-## Remaining Phases
+## Key API Endpoints
+- `POST /api/auth/login` - JWT auth
+- `GET /api/routes` - Public published routes only
+- `GET /api/map/schematic` - Schematic map data (public)
+- `POST /api/admin/routes/{id}/duplicate` - Duplicate route
+- `GET /api/admin/routes/{id}/export` - Export JSON
+- `POST /api/admin/routes/import` - Import JSON
+- `POST /api/admin/checkpoints/reorder` - Bulk reorder
+- `POST /api/admin/checkpoints/{id}/duplicate` - Duplicate checkpoint
+- `GET /api/admin/media` - Library with search/filter params
+- `POST /api/media/upload` - Upload with validation (admin/trainer)
 
-### P1: Phase 3 - Media UX and Management
-- Drag-drop + picker for checkpoint media
-- Multi-file queue with progress, retry/cancel
-- Media library with filter by route/checkpoint/type/date
-- File type/size validation with clear messages
-- Thumbnails/lazy loading
-
-### P2: Phase 4 - Multi-Origin Schematic Map
-- Metro-style SVG schematic map showing all origins converging to destination
-- Data model for map nodes/edges/route paths in DB
-- Customer-facing map UI with route switching, progress highlighting
-- Mobile-first, accessibility fallback list view
-- Admin tooling for map metadata
-
-### Refactoring (Ongoing)
-- Split server.py into modular APIRouter files (auth.py, admin.py, routes.py, etc.)
+## Routes (6 Published)
+1. Metro Gate 5 (metro) - 7 CPs, 12min
+2. Red Fort Side (red_fort) - 7 CPs, 18min
+3. Omaxe Mall (omaxe) - 5 CPs, 10min
+4. Town Hall (town_hall) - 6 CPs, 15min
+5. Building Entrance (building_entrance) - 3 CPs, 3min
+6. Gurudwara Sis Ganj (gurudwara) - 6 CPs, 14min
 
 ## Test Credentials
-- **Admin**: username=admin, otp=admin123
-- **Trainer**: username=trainer1, otp=admin123
-- **Helpdesk**: username=helpdesk1, otp=admin123
-- DEV_MODE=true enables admin123 bypass for all users
+- Admin: admin / admin123
+- Trainer: trainer1 / admin123
+- Helpdesk: helpdesk1 / admin123
+
+## Remaining / Backlog
+- **Route Preview mode**: Admin/trainer simulate customer journey without real sessions
+- **Admin map metadata editor**: Let admin fine-tune node positions in the schematic
+- **server.py refactoring**: Split into modular APIRouter files
+- **PWA enhancements**: Offline support, push notifications
+- **Real OTP delivery**: Currently DEV_MODE bypass only
 
 ## Key Files
-- `/app/backend/server.py` - All API endpoints (monolithic, ~1700 lines)
-- `/app/backend/models.py` - Pydantic models
-- `/app/backend/seed_data.py` - Database seeder with 6 routes + Gurudwara
-- `/app/frontend/src/pages/AdminRoutes.jsx` - CMS page with DnD
+- `/app/backend/server.py` - All API endpoints (~1750 lines)
+- `/app/frontend/src/pages/AdminRoutes.jsx` - Route CMS with DnD
+- `/app/frontend/src/pages/AdminMediaManagement.jsx` - Media library
+- `/app/frontend/src/pages/SchematicMapPage.jsx` - SVG schematic map
 - `/app/frontend/src/lib/api.js` - API client
-- `/app/frontend/src/components/shared.jsx` - Shared components
-- `/app/backend/tests/test_admin_routes_cms.py` - Phase 2 backend tests
+- `/app/backend/seed_data.py` - Seeder with 6 routes including Gurudwara
+- `/app/backend/tests/` - Backend test files
