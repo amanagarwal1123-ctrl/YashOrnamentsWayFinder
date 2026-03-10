@@ -91,6 +91,11 @@ export const adminGetCheckpoints = (routeId) => API.get(`/admin/checkpoints?rout
 export const adminCreateCheckpoint = (data) => API.post('/admin/checkpoints', data);
 export const adminUpdateCheckpoint = (cpId, data) => API.put(`/admin/checkpoints/${cpId}`, data);
 export const adminDeleteCheckpoint = (cpId) => API.delete(`/admin/checkpoints/${cpId}`);
+export const adminReorderCheckpoints = (order) => API.post('/admin/checkpoints/reorder', { order });
+export const adminDuplicateCheckpoint = (cpId) => API.post(`/admin/checkpoints/${cpId}/duplicate`);
+export const adminDuplicateRoute = (routeId) => API.post(`/admin/routes/${routeId}/duplicate`);
+export const adminExportRoute = (routeId) => API.get(`/admin/routes/${routeId}/export`);
+export const adminImportRoute = (data) => API.post('/admin/routes/import', data);
 export const adminGetUsers = () => API.get('/admin/users');
 export const adminCreateUser = (data) => API.post('/admin/users', data);
 export const adminToggleUser = (userId) => API.put(`/admin/users/${userId}/toggle-active`);

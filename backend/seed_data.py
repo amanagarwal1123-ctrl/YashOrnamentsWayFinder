@@ -88,6 +88,7 @@ async def seed():
     route_omaxe = gen_id()
     route_town_hall = gen_id()
     route_building = gen_id()
+    route_gurudwara = gen_id()
     
     routes = [
         {'id': route_metro, 'name': 'From Metro Gate 5', 'description': 'Walk from Chandni Chowk Metro Station Gate 5 through the market', 'start_type': 'metro', 'start_label': 'Chandni Chowk Metro - Gate 5', 'difficulty': 'easy', 'estimated_time_minutes': 12, 'checkpoint_count': 6, 'status': 'published', 'created_by': 'system', 'created_at': now().isoformat(), 'updated_at': now().isoformat()},
@@ -95,6 +96,7 @@ async def seed():
         {'id': route_omaxe, 'name': 'From Omaxe Mall', 'description': 'Walk from Omaxe Chowk Mall entrance towards Kucha Mahajani', 'start_type': 'omaxe', 'start_label': 'Omaxe Chowk Mall Entrance', 'difficulty': 'easy', 'estimated_time_minutes': 10, 'checkpoint_count': 5, 'status': 'published', 'created_by': 'system', 'created_at': now().isoformat(), 'updated_at': now().isoformat()},
         {'id': route_town_hall, 'name': 'From Town Hall', 'description': 'Walk from Town Hall Metro / Delhi Town Hall side', 'start_type': 'town_hall', 'start_label': 'Delhi Town Hall', 'difficulty': 'moderate', 'estimated_time_minutes': 15, 'checkpoint_count': 6, 'status': 'published', 'created_by': 'system', 'created_at': now().isoformat(), 'updated_at': now().isoformat()},
         {'id': route_building, 'name': 'From Building Entrance', 'description': 'Already at Yash Complex? Navigate to the correct floor', 'start_type': 'building_entrance', 'start_label': 'Yash Complex Building Gate', 'difficulty': 'easy', 'estimated_time_minutes': 3, 'checkpoint_count': 3, 'status': 'published', 'created_by': 'system', 'created_at': now().isoformat(), 'updated_at': now().isoformat()},
+        {'id': route_gurudwara, 'name': 'From Gurudwara Sis Ganj', 'description': 'Walk from Gurudwara Sis Ganj Sahib through Chandni Chowk market', 'start_type': 'gurudwara', 'start_label': 'Gurudwara Sis Ganj Sahib', 'difficulty': 'moderate', 'estimated_time_minutes': 14, 'checkpoint_count': 6, 'status': 'published', 'created_by': 'system', 'created_at': now().isoformat(), 'updated_at': now().isoformat()},
     ]
     await db.routes.insert_many(routes)
     print(f'Seeded {len(routes)} routes')
@@ -149,8 +151,18 @@ async def seed():
         {'route_id': route_building, 'order': 3, 'name': '5th Floor - Destination', 'short_instruction': 'Go to 5th floor, office is on the left', 'direction': 'destination', 'indoor': True, 'floor_context': '5th Floor', 'is_critical': True, 'risk_level': 'low', 'fallback_text': 'Go to 5th floor, left side', 'heading': 0.0, 'lat': 28.6546, 'lng': 77.2273},
     ]
     
+    # Gurudwara route
+    gurudwara_cps = [
+        {'route_id': route_gurudwara, 'order': 1, 'name': 'Gurudwara Sis Ganj Exit', 'short_instruction': 'Exit the Gurudwara from the Chandni Chowk road side gate', 'direction': 'straight', 'indoor': False, 'is_critical': True, 'risk_level': 'low', 'fallback_text': 'Exit Gurudwara towards Chandni Chowk road', 'heading': 270.0, 'lat': 28.6560, 'lng': 77.2305},
+        {'route_id': route_gurudwara, 'order': 2, 'name': 'Chandni Chowk Road West', 'short_instruction': 'Walk westward along Chandni Chowk main road towards Fatehpuri', 'direction': 'straight', 'indoor': False, 'is_critical': False, 'risk_level': 'low', 'fallback_text': 'Walk west on main road', 'heading': 270.0, 'lat': 28.6558, 'lng': 77.2290},
+        {'route_id': route_gurudwara, 'order': 3, 'name': 'Kucha Mahajani Lane Entry', 'short_instruction': 'Turn left into Kucha Mahajani lane', 'direction': 'left', 'indoor': False, 'is_critical': True, 'risk_level': 'high', 'fallback_text': 'Turn left into Kucha Mahajani', 'heading': 180.0, 'lat': 28.6555, 'lng': 77.2278},
+        {'route_id': route_gurudwara, 'order': 4, 'name': 'Silver Market Lane', 'short_instruction': 'Walk straight through the silver market area', 'direction': 'straight', 'indoor': False, 'is_critical': False, 'risk_level': 'medium', 'fallback_text': 'Keep walking straight, dont turn', 'heading': 180.0, 'lat': 28.6550, 'lng': 77.2275},
+        {'route_id': route_gurudwara, 'order': 5, 'name': 'Yash Complex Entrance', 'short_instruction': 'Enter the Yash Complex building (SECOND similar building)', 'direction': 'enter', 'indoor': False, 'is_critical': True, 'risk_level': 'high', 'fallback_text': 'Enter Yash Complex (2nd building)', 'heading': 90.0, 'lat': 28.6546, 'lng': 77.2273},
+        {'route_id': route_gurudwara, 'order': 6, 'name': '5th Floor - Destination', 'short_instruction': 'Take stairs or lift to 5th floor', 'direction': 'climb', 'indoor': True, 'floor_context': '5th Floor', 'is_critical': True, 'risk_level': 'low', 'fallback_text': 'Go to 5th floor', 'heading': 0.0, 'lat': 28.6546, 'lng': 77.2273},
+    ]
+    
     all_cps = []
-    for cp_list in [metro_cps, red_fort_cps, omaxe_cps, town_hall_cps, building_cps]:
+    for cp_list in [metro_cps, red_fort_cps, omaxe_cps, town_hall_cps, building_cps, gurudwara_cps]:
         for cp in cp_list:
             cp['id'] = gen_id()
             cp.setdefault('long_instruction', cp.get('short_instruction', ''))

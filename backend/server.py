@@ -51,10 +51,14 @@ db = client[os.environ['DB_NAME']]
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 # ========== Security Config ==========
-JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_urlsafe(48))
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRE_HOURS = 12
 DEV_MODE = os.environ.get('DEV_MODE', 'false').lower() == 'true'
+
+_jwt_secret_env = os.environ.get('JWT_SECRET', '')
+if not _jwt_secret_env and not DEV_MODE:
+    raise RuntimeError("JWT_SECRET must be set in production (DEV_MODE is not enabled)")
+JWT_SECRET = _jwt_secret_env or secrets.token_urlsafe(48)
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -599,6 +603,100 @@ async def admin_delete_route(route_id: str, _user: dict = Depends(require_admin)
     await db.checkpoints.delete_many({'route_id': route_id})
     return {'status': 'deleted'}
 
+@api_router.post("/admin/routes/{route_id}/duplicate")
+async def admin_duplicate_route(route_id: str, _user: dict = Depends(require_admin_or_trainer)):
+    """Duplicate a route and all its checkpoints."""
+    route = await db.routes.find_one({'id': route_id}, {'_id': 0})
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+    new_route_id = gen_id()
+    new_route = {
+        **route,
+        'id': new_route_id,
+        'name': f"{route['name']} (Copy)",
+        'status': 'draft',
+        'created_at': now_utc().isoformat(),
+        'updated_at': now_utc().isoformat(),
+    }
+    await db.routes.insert_one(new_route)
+    # Duplicate checkpoints
+    cps = await db.checkpoints.find({'route_id': route_id}, {'_id': 0}).to_list(200)
+    if cps:
+        for cp in cps:
+            cp['id'] = gen_id()
+            cp['route_id'] = new_route_id
+            cp['created_at'] = now_utc().isoformat()
+            cp['updated_at'] = now_utc().isoformat()
+        await db.checkpoints.insert_many(cps)
+    new_route['checkpoint_count'] = len(cps)
+    await db.routes.update_one({'id': new_route_id}, {'$set': {'checkpoint_count': len(cps)}})
+    return serialize_doc(new_route)
+
+@api_router.get("/admin/routes/{route_id}/export")
+async def admin_export_route(route_id: str, _user: dict = Depends(require_admin_or_trainer)):
+    """Export a route and its checkpoints as JSON."""
+    route = await db.routes.find_one({'id': route_id}, {'_id': 0})
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+    cps = await db.checkpoints.find({'route_id': route_id}, {'_id': 0}).sort('order', 1).to_list(200)
+    return {'route': serialize_doc(route), 'checkpoints': serialize_doc(cps)}
+
+@api_router.post("/admin/routes/import")
+async def admin_import_route(data: dict, _user: dict = Depends(require_admin_or_trainer)):
+    """Import a route from JSON. Creates new IDs."""
+    route_data = data.get('route', {})
+    cps_data = data.get('checkpoints', [])
+    if not route_data.get('name'):
+        raise HTTPException(status_code=400, detail="Route name is required in import data")
+    new_route_id = gen_id()
+    new_route = {
+        'id': new_route_id,
+        'name': route_data.get('name', ''),
+        'description': route_data.get('description', ''),
+        'start_type': route_data.get('start_type', 'custom'),
+        'start_label': route_data.get('start_label', ''),
+        'difficulty': route_data.get('difficulty', 'easy'),
+        'estimated_time_minutes': route_data.get('estimated_time_minutes', 15),
+        'checkpoint_count': 0,
+        'status': 'draft',
+        'created_by': _user.get('username', ''),
+        'created_at': now_utc().isoformat(),
+        'updated_at': now_utc().isoformat(),
+    }
+    await db.routes.insert_one(new_route)
+    imported_cps = []
+    for cp in cps_data:
+        new_cp = {
+            'id': gen_id(),
+            'route_id': new_route_id,
+            'order': cp.get('order', len(imported_cps) + 1),
+            'name': cp.get('name', ''),
+            'short_instruction': cp.get('short_instruction', ''),
+            'long_instruction': cp.get('long_instruction', ''),
+            'landmark_description': cp.get('landmark_description', ''),
+            'what_to_look_for': cp.get('what_to_look_for', ''),
+            'photo_url': cp.get('photo_url', ''),
+            'video_url': cp.get('video_url', ''),
+            'arrow_map_url': cp.get('arrow_map_url', ''),
+            'direction': cp.get('direction', 'straight'),
+            'indoor': cp.get('indoor', False),
+            'floor_context': cp.get('floor_context', ''),
+            'is_critical': cp.get('is_critical', True),
+            'risk_level': cp.get('risk_level', 'low'),
+            'fallback_text': cp.get('fallback_text', ''),
+            'heading': cp.get('heading', 0.0),
+            'lat': cp.get('lat', 0.0),
+            'lng': cp.get('lng', 0.0),
+            'created_at': now_utc().isoformat(),
+            'updated_at': now_utc().isoformat(),
+        }
+        imported_cps.append(new_cp)
+    if imported_cps:
+        await db.checkpoints.insert_many(imported_cps)
+    new_route['checkpoint_count'] = len(imported_cps)
+    await db.routes.update_one({'id': new_route_id}, {'$set': {'checkpoint_count': len(imported_cps)}})
+    return serialize_doc(new_route)
+
 # ========== ADMIN: Checkpoints Management ==========
 @api_router.get("/admin/checkpoints")
 async def admin_get_checkpoints(route_id: str = None, _user: dict = Depends(require_admin_or_trainer)):
@@ -662,6 +760,43 @@ async def admin_delete_checkpoint(checkpoint_id: str, _user: dict = Depends(requ
     count = await db.checkpoints.count_documents({'route_id': cp['route_id']})
     await db.routes.update_one({'id': cp['route_id']}, {'$set': {'checkpoint_count': count}})
     return {'status': 'deleted'}
+
+@api_router.post("/admin/checkpoints/reorder")
+async def admin_reorder_checkpoints(data: dict, _user: dict = Depends(require_admin_or_trainer)):
+    """Bulk update checkpoint order. Expects {order: [{id: ..., order: ...}]}."""
+    items = data.get('order', [])
+    if not items:
+        raise HTTPException(status_code=400, detail="No order data provided")
+    for item in items:
+        await db.checkpoints.update_one(
+            {'id': item['id']},
+            {'$set': {'order': item['order'], 'updated_at': now_utc().isoformat()}}
+        )
+    return {'status': 'ok', 'updated': len(items)}
+
+@api_router.post("/admin/checkpoints/{checkpoint_id}/duplicate")
+async def admin_duplicate_checkpoint(checkpoint_id: str, _user: dict = Depends(require_admin_or_trainer)):
+    """Duplicate a checkpoint within the same route, placed after the original."""
+    cp = await db.checkpoints.find_one({'id': checkpoint_id}, {'_id': 0})
+    if not cp:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    # Shift subsequent checkpoints
+    await db.checkpoints.update_many(
+        {'route_id': cp['route_id'], 'order': {'$gt': cp['order']}},
+        {'$inc': {'order': 1}}
+    )
+    new_cp = {
+        **cp,
+        'id': gen_id(),
+        'name': f"{cp['name']} (Copy)",
+        'order': cp['order'] + 1,
+        'created_at': now_utc().isoformat(),
+        'updated_at': now_utc().isoformat(),
+    }
+    await db.checkpoints.insert_one(new_cp)
+    count = await db.checkpoints.count_documents({'route_id': cp['route_id']})
+    await db.routes.update_one({'id': cp['route_id']}, {'$set': {'checkpoint_count': count}})
+    return serialize_doc(new_cp)
 
 # ========== ADMIN: Users ==========
 @api_router.get("/admin/users")
@@ -1409,7 +1544,7 @@ async def admin_generate_qr(data: dict, _user: dict = Depends(require_admin)):
     
     # Generate QR code image
     # The QR should encode a URL that includes the code
-    frontend_url = os.environ.get('FRONTEND_URL', 'https://jewel-guide.preview.emergentagent.com')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://metro-routes-ui.preview.emergentagent.com')
     scan_url = f"{frontend_url}/scan/{qr_code}"
     
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
