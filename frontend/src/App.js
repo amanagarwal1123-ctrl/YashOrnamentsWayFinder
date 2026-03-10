@@ -10,6 +10,7 @@ import ScanLandingPage from '@/pages/ScanLandingPage';
 import RouteSelectionPage from '@/pages/RouteSelectionPage';
 import CheckpointNavPage from '@/pages/CheckpointNavPage';
 import TreasureMapPage from '@/pages/TreasureMapPage';
+import SchematicMapPage from '@/pages/SchematicMapPage';
 import WhereAmIPage from '@/pages/WhereAmIPage';
 import HelpPage from '@/pages/HelpPage';
 import ArrivalPage from '@/pages/ArrivalPage';
@@ -41,6 +42,7 @@ function App() {
           <Route path="/routes" element={<RouteSelectionPage />} />
           <Route path="/navigate" element={<CheckpointNavPage />} />
           <Route path="/map" element={<TreasureMapPage />} />
+          <Route path="/schematic" element={<SchematicMapPage />} />
           <Route path="/where-am-i" element={<WhereAmIPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/arrived" element={<ArrivalPage />} />

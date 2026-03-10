@@ -1313,12 +1313,19 @@ async def upload_media(
         raise HTTPException(status_code=400, detail="No file provided")
     
     file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'png'
+    allowed_exts = {'jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'mp4', 'mov', 'avi', 'webm'}
+    if file_ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"File type .{file_ext} not allowed. Supported: {', '.join(sorted(allowed_exts))}")
+    
     media_id = gen_id()
     original_filename = f"{media_id}_original.{file_ext}"
     watermarked_filename = f"{media_id}_watermarked.{file_ext}"
     
     # Read file content
     content = await file.read()
+    max_size = 50 * 1024 * 1024  # 50 MB
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail=f"File too large ({len(content) // (1024*1024)}MB). Maximum is 50MB.")
     
     # Save original
     original_path = ORIGINALS_DIR / original_filename
@@ -1450,13 +1457,20 @@ async def get_placeholder_image(label: str = "Checkpoint"):
 
 # ========== ADMIN: Media Management ==========
 @api_router.get("/admin/media")
-async def admin_get_media(media_type: str = None, route_id: str = None, _user: dict = Depends(require_admin)):
+async def admin_get_media(
+    media_type: str = None, route_id: str = None, checkpoint_id: str = None,
+    search: str = None, _user: dict = Depends(require_admin_or_trainer),
+):
     query = {}
-    if media_type:
+    if media_type and media_type != 'all':
         query['media_type'] = media_type
-    if route_id:
+    if route_id and route_id != 'all':
         query['route_id'] = route_id
-    media = await db.media_files.find(query, {'_id': 0}).sort('upload_timestamp', -1).to_list(200)
+    if checkpoint_id:
+        query['checkpoint_id'] = checkpoint_id
+    if search:
+        query['filename'] = {'$regex': search, '$options': 'i'}
+    media = await db.media_files.find(query, {'_id': 0}).sort('upload_timestamp', -1).to_list(500)
     return serialize_doc(media)
 
 @api_router.delete("/admin/media/{media_id}")
@@ -1683,9 +1697,61 @@ async def health_check():
     return {
         'status': 'healthy' if db_ok else 'degraded',
         'database': 'connected' if db_ok else 'disconnected',
-        'version': '2.0.0',
+        'version': '2.1.0',
         'app': 'Yash Ornaments WayFinder',
     }
+
+# ========== PUBLIC: Schematic Map Data ==========
+@api_router.get("/map/schematic")
+async def get_schematic_map():
+    """Return schematic map data for the customer map UI. DB-driven, not hardcoded."""
+    map_data = await db.schematic_map.find_one({'active': True}, {'_id': 0})
+    if not map_data:
+        # Auto-generate from published routes & checkpoints
+        routes = await db.routes.find({'status': 'published'}, {'_id': 0}).to_list(20)
+        destination = {'id': 'destination', 'label': 'Yash Complex\n5th Floor', 'x': 500, 'y': 400, 'type': 'destination'}
+        nodes = [destination]
+        edges = []
+        route_paths = []
+        # Layout origins in a fan around the destination
+        import math
+        origin_count = len([r for r in routes if r.get('start_type') != 'building_entrance'])
+        angle_step = math.pi / max(origin_count + 1, 2)
+        origin_idx = 0
+        for route in routes:
+            if route.get('start_type') == 'building_entrance':
+                continue
+            cps = await db.checkpoints.find({'route_id': route['id']}, {'_id': 0}).sort('order', 1).to_list(50)
+            if not cps:
+                continue
+            angle = math.pi - angle_step * (origin_idx + 1)
+            radius = 320
+            ox = 500 + radius * math.cos(angle)
+            oy = 400 - radius * math.sin(angle)
+            origin_node = {'id': f"origin-{route['id'][:8]}", 'label': route.get('start_label') or route['name'], 'x': round(ox), 'y': round(oy), 'type': 'origin', 'route_id': route['id']}
+            nodes.append(origin_node)
+            path_node_ids = [origin_node['id']]
+            total = len(cps)
+            for i, cp in enumerate(cps):
+                if i == 0 or i == total - 1:
+                    continue
+                t = (i) / max(total - 1, 1)
+                nx = round(ox + (500 - ox) * t)
+                ny = round(oy + (400 - oy) * t)
+                nid = f"cp-{cp['id'][:8]}"
+                nodes.append({'id': nid, 'label': cp['name'], 'x': nx, 'y': ny, 'type': 'checkpoint', 'checkpoint_id': cp['id'], 'route_id': route['id'], 'order': cp['order']})
+                path_node_ids.append(nid)
+            path_node_ids.append('destination')
+            for j in range(len(path_node_ids) - 1):
+                edges.append({'from': path_node_ids[j], 'to': path_node_ids[j + 1], 'route_id': route['id']})
+            route_paths.append({'route_id': route['id'], 'route_name': route['name'], 'start_type': route.get('start_type', ''), 'color': _route_color(route.get('start_type', '')), 'node_ids': path_node_ids})
+            origin_idx += 1
+        return {'nodes': nodes, 'edges': edges, 'route_paths': route_paths, 'generated': True}
+    return serialize_doc(map_data)
+
+def _route_color(start_type):
+    colors = {'metro': '#2563EB', 'red_fort': '#DC2626', 'omaxe': '#16A34A', 'gurudwara': '#D97706', 'town_hall': '#7C3AED', 'building_entrance': '#6B7280'}
+    return colors.get(start_type, '#6B7280')
 
 # Include router
 app.include_router(api_router)

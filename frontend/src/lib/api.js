@@ -139,11 +139,13 @@ export const createHelpdeskSSE = () => {
 export const uploadMedia = (formData) => API.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const serveMediaUrl = (mediaId) => `${BACKEND_URL}/api/media/${mediaId}/serve`;
 export const placeholderMediaUrl = (label) => `${BACKEND_URL}/api/media/placeholder/${encodeURIComponent(label)}`;
-export const adminGetMedia = (mediaType, routeId) => {
-  let url = '/admin/media?';
-  if (mediaType) url += `media_type=${mediaType}&`;
-  if (routeId) url += `route_id=${routeId}`;
-  return API.get(url);
+export const adminGetMedia = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.media_type) q.append('media_type', params.media_type);
+  if (params.route_id) q.append('route_id', params.route_id);
+  if (params.checkpoint_id) q.append('checkpoint_id', params.checkpoint_id);
+  if (params.search) q.append('search', params.search);
+  return API.get(`/admin/media?${q.toString()}`);
 };
 export const adminDeleteMedia = (mediaId) => API.delete(`/admin/media/${mediaId}`);
 
@@ -159,4 +161,7 @@ export const adminGetQRImageUrl = (qrCode) => `${BACKEND_URL}/api/admin/qr/${qrC
 // ---- QR Scan (customer flow) ----
 export const getQRInfo = (qrCode) => API.get(`/scan/${qrCode}/info`);
 export const registerFromScan = (qrCode, data) => API.post(`/scan/${qrCode}/register`, data);
+
+// ---- Schematic Map ----
+export const getSchematicMap = () => API.get('/map/schematic');
 
