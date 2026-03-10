@@ -10,10 +10,12 @@
   - **Human review/approval required** (Trainer/Admin)
   - Store suggestion history + approvals in **audit logs**
 - Deliver **business-segmented analytics** (AJPL vs Yash vs combined) and operational monitoring.
+- Ensure **mobile usability across internal dashboards** (Admin/Trainer/Helpdesk) so operations work smoothly from phones.
 
 **Status update:**
 - **Phase 1 complete:** LLM integration verified end-to-end.
 - **Phase 2 complete:** V1 app delivered; all 5 MVP user stories passing; testing at **Backend 100%**, **Frontend 95%** with the minor issue fixed (MapPin import).
+- **Mobile admin UX fix complete:** Admin menus now behave correctly on mobile (sidebar collapses into a Sheet drawer with a hamburger header); desktop unchanged.
 - **Now starting Phase 3:** Trainer workflow + in-product LLM assistance + Analytics V1.
 
 ---
@@ -90,6 +92,16 @@
 - Automated + manual verification.
 - Backend API success: 100%.
 - Frontend success: 95% → minor JS import bug fixed.
+
+8) **Mobile Admin Responsiveness Hardening** ✅
+- Fixed admin menu behavior on phones:
+  - Replaced always-visible sidebar with **responsive AdminSidebar**
+  - **Mobile:** sticky top bar with hamburger → **Sheet drawer** navigation
+  - **Desktop:** existing sidebar unchanged
+- Updated all admin pages (9):
+  - wrapper layout: `flex-col` on mobile / `flex-row` on desktop
+  - responsive padding: `p-4 md:p-6`
+- Added distinct mobile `data-testid` prefixes to avoid selector conflicts (test stability).
 
 ---
 
@@ -198,3 +210,4 @@
 - **Trainer + LLM compliance:** suggestions generated on demand, never overwrite trainer text; approvals + history persisted in audit logs.
 - **Operational visibility:** Admin can monitor live sessions (red AJPL / blue Yash), review timelines, and see segmented analytics.
 - **AJPL gold rates:** manually managed by admin with “last updated” timestamp; never shown in Yash sessions.
+- **Mobile operations readiness:** internal Admin/Trainer workflows remain usable on phones (menus collapse and do not block content).

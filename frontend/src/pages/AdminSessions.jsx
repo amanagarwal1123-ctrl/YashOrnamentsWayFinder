@@ -60,9 +60,9 @@ export default function AdminSessions() {
   if (!isLoggedIn) return null;
 
   return (
-    <div className="flex min-h-screen bg-[hsl(var(--background))]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[hsl(var(--background))]">
       <AdminSidebar active="sessions" />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 overflow-auto">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold mb-1">Sessions</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mb-4">Monitor customer navigation sessions</p>

@@ -53,9 +53,9 @@ export default function AdminAnalytics() {
   if (!isLoggedIn) return null;
 
   return (
-    <div className="flex min-h-screen bg-[hsl(var(--background))]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[hsl(var(--background))]">
       <AdminSidebar active="analytics" />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 overflow-auto">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>

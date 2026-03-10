@@ -1,34 +1,22 @@
 [
   {
-    "content": "CRITICAL: Add JWT auth middleware + role guards on all /admin/* and /helpdesk/* routes",
+    "content": "Update AdminSidebar to be responsive: hidden on mobile, visible on desktop",
     "status": "completed"
   },
   {
-    "content": "CRITICAL: Fix /api/auth/me to derive user from JWT token, not query param",
+    "content": "Add mobile admin header with hamburger menu that opens Sheet drawer",
     "status": "completed"
   },
   {
-    "content": "HIGH: Gate OTP bypass (admin123) behind DEV_MODE env flag",
+    "content": "Ensure all admin pages work correctly with the responsive sidebar",
     "status": "completed"
   },
   {
-    "content": "HIGH: Lock down CORS — strict origin allowlist, no wildcard with credentials",
+    "content": "Check helpdesk dashboard and other pages for mobile issues",
     "status": "completed"
   },
   {
-    "content": "MEDIUM: Support 'password' as alias for 'otp' in login schema",
-    "status": "completed"
-  },
-  {
-    "content": "LOW: Add /api/health JSON endpoint for monitoring",
-    "status": "completed"
-  },
-  {
-    "content": "Update frontend to send Authorization header on all admin/helpdesk calls",
-    "status": "completed"
-  },
-  {
-    "content": "End to End Testing",
+    "content": "Test on mobile viewport and verify collapsing behavior",
     "status": "completed"
   }
 ]

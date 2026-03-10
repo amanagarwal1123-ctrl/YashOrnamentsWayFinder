@@ -48,9 +48,9 @@ export default function AdminBrandingSettings() {
   if (!isLoggedIn) return null;
 
   return (
-    <div className="flex min-h-screen bg-[hsl(var(--background))]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[hsl(var(--background))]">
       <AdminSidebar active="branding" />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 overflow-auto">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-1">Branding Settings</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6">Configure watermark and branding for navigation media</p>

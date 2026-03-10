@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class BackendAPITester:
-    def __init__(self, base_url="https://content-section.preview.emergentagent.com"):
+    def __init__(self, base_url="https://jewel-guide.preview.emergentagent.com"):
         self.base_url = f"{base_url}/api"
         self.session = requests.Session()
         self.token = None

@@ -1366,7 +1366,7 @@ async def admin_generate_qr(data: dict, _user: dict = Depends(require_admin)):
     
     # Generate QR code image
     # The QR should encode a URL that includes the code
-    frontend_url = os.environ.get('FRONTEND_URL', 'https://content-section.preview.emergentagent.com')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://jewel-guide.preview.emergentagent.com')
     scan_url = f"{frontend_url}/scan/{qr_code}"
     
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
