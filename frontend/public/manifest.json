@@ -1,0 +1,10 @@
+{
+  "short_name": "WayFinder",
+  "name": "Yash Ornaments WayFinder",
+  "description": "Step-by-step navigation to Yash Ornaments & AJPL in Chandni Chowk",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1a1a2e",
+  "background_color": "#F7F5F0"
+}

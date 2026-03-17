@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getQRInfo, registerFromScan } from '@/lib/api';
+import { getQRInfo, registerFromScan, createSession } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,11 +23,31 @@ export default function ScanLandingPage() {
   useEffect(() => {
     if (!qrCode) { navigate('/'); return; }
     getQRInfo(qrCode)
-      .then(r => { setQrInfo(r.data); setLoading(false); })
+      .then(r => {
+        setQrInfo(r.data);
+        setLoading(false);
+        // Fast mode: create session immediately, skip form
+        if (r.data.entry_mode === 'fast') {
+          handleFastEntry(r.data);
+        }
+      })
       .catch(() => { setError('Invalid or expired QR code'); setLoading(false); });
-  }, [qrCode, navigate]);
+  }, [qrCode]);
 
-  const handleSubmit = async () => {
+  const handleFastEntry = async (info) => {
+    setSubmitting(true);
+    try {
+      const res = await createSession(qrCode, navigator.userAgent);
+      startSession(res.data.session, res.data.business);
+      toast.success(`Welcome! Let's navigate to ${res.data.business.destination_label || res.data.business.name}`);
+      navigate('/hub');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start session');
+      setSubmitting(false);
+    }
+  };
+
+  const handleAssistedSubmit = async () => {
     if (!name.trim()) { toast.error('Please enter your name'); return; }
     if (!phone.trim() || phone.length < 10) { toast.error('Please enter a valid phone number'); return; }
     setSubmitting(true);
@@ -38,8 +58,8 @@ export default function ScanLandingPage() {
         device_info: navigator.userAgent,
       });
       startSession(res.data.session, res.data.business);
-      toast.success(`Welcome ${name}! Let's navigate to ${res.data.business.destination_label}`);
-      navigate('/');
+      toast.success(`Welcome ${name}! Let's navigate to ${res.data.business.destination_label || res.data.business.name}`);
+      navigate('/hub');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Registration failed');
     } finally {
@@ -47,10 +67,15 @@ export default function ScanLandingPage() {
     }
   };
 
-  if (loading) {
+  if (loading || (qrInfo?.entry_mode === 'fast' && !error)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
-        <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--muted-foreground))]" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--muted-foreground))] mx-auto mb-3" />
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            {qrInfo?.entry_mode === 'fast' ? 'Starting your navigation...' : 'Loading...'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -70,6 +95,7 @@ export default function ScanLandingPage() {
     );
   }
 
+  // Assisted mode: show name + phone form
   const business = qrInfo?.business;
   const isAjpl = business?.slug === 'ajpl';
 
@@ -78,7 +104,6 @@ export default function ScanLandingPage() {
       {/* Blurred Map Background */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[hsl(var(--muted))]" />
-        {/* Simulated map grid */}
         <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -86,17 +111,11 @@ export default function ScanLandingPage() {
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
-          {/* Map-like elements */}
           <line x1="10%" y1="20%" x2="60%" y2="45%" stroke="hsl(var(--muted-foreground))" strokeWidth="2" opacity="0.3" />
           <line x1="60%" y1="45%" x2="80%" y2="55%" stroke="hsl(var(--muted-foreground))" strokeWidth="2" opacity="0.3" />
-          <line x1="30%" y1="10%" x2="45%" y2="70%" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" opacity="0.2" />
           <circle cx="60%" cy="45%" r="8" fill="hsl(var(--brand))" opacity="0.4" />
           <circle cx="80%" cy="55%" r="6" fill="hsl(var(--destructive))" opacity="0.3" />
-          <text x="62%" y="42%" fontSize="10" fill="hsl(var(--muted-foreground))" opacity="0.4">Kucha Mahajani</text>
-          <text x="15%" y="25%" fontSize="9" fill="hsl(var(--muted-foreground))" opacity="0.3">Metro Gate 5</text>
-          <text x="75%" y="60%" fontSize="9" fill="hsl(var(--muted-foreground))" opacity="0.3">Yash Complex</text>
         </svg>
-        {/* Blur overlay */}
         <div className="absolute inset-0 backdrop-blur-md bg-[hsl(var(--background)/0.6)]" />
       </div>
 
@@ -118,9 +137,10 @@ export default function ScanLandingPage() {
             <h1 className="font-display text-2xl font-bold" data-testid="scan-business-name">
               {business?.full_name || business?.name}
             </h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-              {business?.address}
-            </p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{business?.address}</p>
+            {qrInfo?.source_label && (
+              <p className="text-xs text-[hsl(var(--brand))] mt-1">{qrInfo.source_label}</p>
+            )}
           </div>
 
           {/* Registration Card */}
@@ -164,13 +184,26 @@ export default function ScanLandingPage() {
                   </div>
                 </div>
 
+                {qrInfo?.default_route && (
+                  <div className="p-3 rounded-lg bg-[hsl(var(--muted))]">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">Pre-selected route:</p>
+                    <p className="text-sm font-medium">{qrInfo.default_route.name}</p>
+                    {qrInfo.default_route.distance_value > 0 && (
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                        {qrInfo.default_route.distance_label || `${qrInfo.default_route.distance_value} ${qrInfo.default_route.distance_unit}`}
+                        {' '} ~ {qrInfo.default_route.estimated_time_minutes} min
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <Button
                   className={`w-full h-12 text-base ${
                     isAjpl
                       ? 'bg-[hsl(43,72%,52%)] text-[hsl(var(--ink))] hover:opacity-90'
                       : 'bg-[hsl(221,100%,56%)] text-white hover:opacity-90'
                   }`}
-                  onClick={handleSubmit}
+                  onClick={handleAssistedSubmit}
                   disabled={submitting}
                   data-testid="scan-start-button"
                 >
@@ -184,7 +217,6 @@ export default function ScanLandingPage() {
             </CardContent>
           </Card>
 
-          {/* Branding Footer */}
           <p className="text-center text-[10px] text-[hsl(var(--muted-foreground))] mt-4" data-testid="branding-footer">
             {qrInfo?.branding_footer || 'Navigation powered by YASH ORNAMENTS'}
           </p>

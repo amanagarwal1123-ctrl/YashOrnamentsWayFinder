@@ -7,8 +7,10 @@ import '@/App.css';
 // Pages
 import LandingPage from '@/pages/LandingPage';
 import ScanLandingPage from '@/pages/ScanLandingPage';
+import NavigationHub from '@/pages/NavigationHub';
 import RouteSelectionPage from '@/pages/RouteSelectionPage';
 import CheckpointNavPage from '@/pages/CheckpointNavPage';
+import RecoveryPage from '@/pages/RecoveryPage';
 import TreasureMapPage from '@/pages/TreasureMapPage';
 import SchematicMapPage from '@/pages/SchematicMapPage';
 import WhereAmIPage from '@/pages/WhereAmIPage';
@@ -25,6 +27,7 @@ import AdminQRGeneration from '@/pages/AdminQRGeneration';
 import AdminBrandingSettings from '@/pages/AdminBrandingSettings';
 import AdminMediaManagement from '@/pages/AdminMediaManagement';
 import AdminTutorialPdf from '@/pages/AdminTutorialPdf';
+import AdminReports from '@/pages/AdminReports';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
 import GoldRatePage from '@/pages/GoldRatePage';
 import GalleryPage from '@/pages/GalleryPage';
@@ -40,8 +43,10 @@ function App() {
           <Route path="/start" element={<LandingPage />} />
           <Route path="/start/:qrCode" element={<LandingPage />} />
           <Route path="/scan/:qrCode" element={<ScanLandingPage />} />
+          <Route path="/hub" element={<NavigationHub />} />
           <Route path="/routes" element={<RouteSelectionPage />} />
           <Route path="/navigate" element={<CheckpointNavPage />} />
+          <Route path="/recovery" element={<RecoveryPage />} />
           <Route path="/map" element={<TreasureMapPage />} />
           <Route path="/schematic" element={<SchematicMapPage />} />
           <Route path="/where-am-i" element={<WhereAmIPage />} />
@@ -63,6 +68,7 @@ function App() {
           <Route path="/admin/qr-codes" element={<AdminQRGeneration />} />
           <Route path="/admin/branding" element={<AdminBrandingSettings />} />
           <Route path="/admin/media" element={<AdminMediaManagement />} />
+          <Route path="/admin/reports" element={<AdminReports />} />
           <Route path="/admin/tutorial-pdf" element={<AdminTutorialPdf />} />
           
           {/* Helpdesk Routes */}

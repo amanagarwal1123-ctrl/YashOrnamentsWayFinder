@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getRoutes, addSessionEvent } from '@/lib/api';
+import { getRoutes, selectRoute } from '@/lib/api';
 import { BrandHeader, BottomActionBar } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,8 +25,8 @@ export default function RouteSelectionPage() {
   const handleStart = async () => {
     if (!selected) { toast.error('Please select a route'); return; }
     try {
-      await addSessionEvent(session.id, 'route_selected', { route_id: selected.id, route_name: selected.name });
-      updateSession({ route_id: selected.id });
+      await selectRoute(session.id, selected.id);
+      updateSession({ route_id: selected.id, route_distance_value: selected.distance_value, route_distance_unit: selected.distance_unit });
       navigate('/navigate');
     } catch (e) {
       toast.error('Failed to start route');
@@ -86,6 +86,11 @@ export default function RouteSelectionPage() {
                           <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
                             <MapPin className="w-3 h-3" /> {route.checkpoint_count} checkpoints
                           </span>
+                          {route.distance_value > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                              {route.distance_label || `${route.distance_value} ${route.distance_unit}`}
+                            </span>
+                          )}
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${difficultyColors[route.difficulty] || ''}`}>
                             {route.difficulty}
                           </span>

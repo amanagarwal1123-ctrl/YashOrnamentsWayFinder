@@ -35,7 +35,8 @@ export default function LandingPage() {
     try {
       const res = await createSession(code, navigator.userAgent);
       startSession(res.data.session, res.data.business);
-      toast.success(`Welcome! Navigating to ${res.data.business.destination_label}`);
+      toast.success(`Welcome! Navigating to ${res.data.business.destination_label || res.data.business.name}`);
+      navigate('/hub');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Invalid QR code');
     } finally {
@@ -81,7 +82,7 @@ export default function LandingPage() {
                 <h2 className="font-semibold text-lg mb-3">Start Your Journey</h2>
                 <Button
                   className="w-full h-12 text-base mb-3 bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))] hover:opacity-90"
-                  onClick={() => navigate('/routes')}
+                  onClick={() => navigate('/hub')}
                   data-testid="landing-start-navigation-button"
                 >
                   <Navigation className="w-5 h-5 mr-2" /> Start Navigation

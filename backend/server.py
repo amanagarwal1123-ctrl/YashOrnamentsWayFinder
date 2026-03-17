@@ -1613,6 +1613,26 @@ async def helpdesk_unclaim_session(session_id: str, _user: dict = Depends(requir
     )
     return {'status': 'unclaimed'}
 
+
+@api_router.get("/helpdesk/recent-completed")
+async def helpdesk_recent_completed(_user: dict = Depends(require_admin_or_helpdesk)):
+    """Get recently completed/abandoned sessions (last 2 hours) for helpdesk view."""
+    cutoff = (now_utc() - timedelta(hours=2)).isoformat()
+    sessions = await db.sessions.find(
+        {'status': {'$in': ['completed', 'abandoned', 'terminated']}, 'last_activity': {'$gte': cutoff}},
+        {'_id': 0}
+    ).sort('last_activity', -1).to_list(50)
+    route_ids = list(set(s.get('route_id', '') for s in sessions if s.get('route_id')))
+    route_lookup = {}
+    if route_ids:
+        for r in await db.routes.find({'id': {'$in': route_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(route_ids)):
+            route_lookup[r['id']] = r['name']
+    result = []
+    for s in sessions:
+        result.append({**serialize_doc(s), 'route_name': route_lookup.get(s.get('route_id', ''), '')})
+    return result
+
+
 # ========== ADMIN: Reports & Export ==========
 @api_router.get("/admin/reports/sessions")
 async def admin_report_sessions(

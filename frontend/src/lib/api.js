@@ -163,6 +163,7 @@ export const helpdeskGetCaseDetail = (caseId) => API.get(`/helpdesk/cases/${case
 export const helpdeskCaseAction = (caseId, action, note) => API.post(`/helpdesk/cases/${caseId}/action`, { action, note });
 export const helpdeskGetCallbacks = (status) => API.get(`/helpdesk/callbacks${status ? `?status=${status}` : ''}`);
 export const helpdeskGetLiveCustomers = () => API.get('/helpdesk/live-customers');
+export const helpdeskGetRecentCompleted = () => API.get('/helpdesk/recent-completed');
 export const helpdeskClaimSession = (sessionId) => API.post(`/helpdesk/sessions/${sessionId}/claim`);
 export const helpdeskUnclaimSession = (sessionId) => API.post(`/helpdesk/sessions/${sessionId}/unclaim`);
 
