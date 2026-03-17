@@ -143,7 +143,8 @@ async def notify_helpdesk(notification: dict):
 async def create_helpdesk_case(session_id: str, business_id: str, case_type: str, 
                                 customer_name: str = "", customer_phone: str = "",
                                 checkpoint_id: str = "", checkpoint_name: str = "", 
-                                route_id: str = ""):
+                                route_id: str = "", priority: str = "normal"):
+    now_ts = now_utc().isoformat()
     case = {
         'id': gen_id(),
         'session_id': session_id,
@@ -156,9 +157,11 @@ async def create_helpdesk_case(session_id: str, business_id: str, case_type: str
         'route_id': route_id,
         'status': 'open',
         'assigned_to': '',
+        'priority': priority,
         'notes': '',
-        'created_at': now_utc().isoformat(),
-        'updated_at': now_utc().isoformat()
+        'last_notification_at': now_ts,
+        'created_at': now_ts,
+        'updated_at': now_ts,
     }
     await db.helpdesk_cases.insert_one(case)
     
@@ -358,7 +361,8 @@ async def add_session_event(session_id: str, req: SessionEventRequest):
         await create_helpdesk_case(
             session_id, session['business_id'], 'help_request',
             session.get('customer_name', ''), session.get('customer_phone', ''),
-            session.get('current_checkpoint_id', ''), cp_name, session.get('route_id', '')
+            session.get('current_checkpoint_id', ''), cp_name, session.get('route_id', ''),
+            priority='high'
         )
     elif req.event_type == 'cannot_find':
         # Log confusion
@@ -367,7 +371,8 @@ async def add_session_event(session_id: str, req: SessionEventRequest):
         await create_helpdesk_case(
             session_id, session['business_id'], 'cannot_find',
             session.get('customer_name', ''), session.get('customer_phone', ''),
-            req.checkpoint_id, cp_name, session.get('route_id', '')
+            req.checkpoint_id, cp_name, session.get('route_id', ''),
+            priority='high'
         )
     elif req.event_type == 'location_shared':
         cp = await db.checkpoints.find_one({'id': session.get('current_checkpoint_id', '')})
@@ -784,6 +789,8 @@ async def admin_create_checkpoint(data: dict, _user: dict = Depends(require_admi
         'is_critical': data.get('is_critical', True),
         'risk_level': data.get('risk_level', 'low'),
         'fallback_text': data.get('fallback_text', ''),
+        'recovery_tags': data.get('recovery_tags', []),
+        'recovery_image_urls': data.get('recovery_image_urls', []),
         'heading': data.get('heading', 0.0),
         'lat': data.get('lat', 0.0),
         'lng': data.get('lng', 0.0),
@@ -985,6 +992,9 @@ async def admin_create_qr_source(data: dict, _user: dict = Depends(require_admin
         'business_id': data.get('business_id', ''),
         'campaign': data.get('campaign', 'default'),
         'description': data.get('description', ''),
+        'source_label': data.get('source_label', ''),
+        'default_route_id': data.get('default_route_id', ''),
+        'entry_mode': data.get('entry_mode', 'fast'),
         'active': True,
         'scan_count': 0,
         'created_at': now_utc().isoformat()
@@ -1141,21 +1151,29 @@ async def helpdesk_case_action(case_id: str, req: HelpdeskActionRequest, _user: 
         'guided': 'in_progress',
         'resolved': 'resolved',
         'closed': 'closed',
-        'note_added': case.get('status', 'open')
+        'note_added': case.get('status', 'open'),
+        'claimed': 'acknowledged',
+        'unclaimed': case.get('status', 'open'),
+        'whatsapp_sent': 'in_progress',
+        'video_attempted': 'in_progress',
     }
     new_status = status_map.get(req.action, case.get('status', 'open'))
     
-    await db.helpdesk_cases.update_one(
-        {'id': case_id},
-        {'$set': {'status': new_status, 'updated_at': now_utc().isoformat()}}
-    )
+    case_update = {'status': new_status, 'updated_at': now_utc().isoformat()}
+    # Keep assigned_to in sync: claim sets it, unclaim clears it
+    if req.action == 'claimed':
+        case_update['assigned_to'] = _user.get('id', '')
+    elif req.action == 'unclaimed':
+        case_update['assigned_to'] = ''
+    
+    await db.helpdesk_cases.update_one({'id': case_id}, {'$set': case_update})
     
     update = {
         'id': gen_id(),
         'case_id': case_id,
         'action': req.action,
         'note': req.note,
-        'performed_by': '',
+        'performed_by': _user.get('id', ''),
         'timestamp': now_utc().isoformat()
     }
     await db.helpdesk_case_updates.insert_one(update)
@@ -1438,10 +1456,15 @@ async def session_recover(session_id: str, data: dict):
     session = await db.sessions.find_one({'id': session_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    route_id = session.get('route_id', '')
+    if not route_id:
+        raise HTTPException(status_code=400, detail="No route selected for this session")
     checkpoint_id = data.get('checkpoint_id', '')
     cp = await db.checkpoints.find_one({'id': checkpoint_id}, {'_id': 0})
     if not cp:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
+    if cp.get('route_id') != route_id:
+        raise HTTPException(status_code=400, detail="Checkpoint does not belong to this session's route")
     update = {
         'current_checkpoint_id': checkpoint_id,
         'current_checkpoint_order': cp.get('order', 0),
@@ -1563,10 +1586,16 @@ async def helpdesk_claim_session(session_id: str, _user: dict = Depends(require_
     session = await db.sessions.find_one({'id': session_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    user_id = _user.get('id', '')
     await db.sessions.update_one({'id': session_id}, {'$set': {
-        'assigned_helpdesk_user_id': _user.get('id', ''),
+        'assigned_helpdesk_user_id': user_id,
         'last_activity': now_utc().isoformat(),
     }})
+    # Also assign all open cases for this session to the same user
+    await db.helpdesk_cases.update_many(
+        {'session_id': session_id, 'status': {'$in': ['open', 'acknowledged', 'in_progress']}},
+        {'$set': {'assigned_to': user_id, 'updated_at': now_utc().isoformat()}},
+    )
     return {'status': 'claimed', 'assigned_to': _user.get('username', '')}
 
 @api_router.post("/helpdesk/sessions/{session_id}/unclaim")
@@ -1578,6 +1607,10 @@ async def helpdesk_unclaim_session(session_id: str, _user: dict = Depends(requir
         'assigned_helpdesk_user_id': '',
         'last_activity': now_utc().isoformat(),
     }})
+    await db.helpdesk_cases.update_many(
+        {'session_id': session_id, 'status': {'$in': ['open', 'acknowledged', 'in_progress']}},
+        {'$set': {'assigned_to': '', 'updated_at': now_utc().isoformat()}},
+    )
     return {'status': 'unclaimed'}
 
 # ========== ADMIN: Reports & Export ==========
