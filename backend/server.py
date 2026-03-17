@@ -195,33 +195,86 @@ async def create_session(req: SessionCreateRequest):
     # Increment scan count
     await db.qr_sources.update_one({'code': req.qr_code}, {'$inc': {'scan_count': 1}})
     
+    # If QR has a default route, pre-populate distance
+    route_distance_value = 0.0
+    route_distance_unit = ''
+    preselected_route_id = qr.get('default_route_id', '')
+    if preselected_route_id:
+        route = await db.routes.find_one({'id': preselected_route_id, 'status': 'published'}, {'_id': 0})
+        if route:
+            route_distance_value = route.get('distance_value', 0.0)
+            route_distance_unit = route.get('distance_unit', 'km')
+    
     session = {
         'id': gen_id(),
         'business_id': business['id'],
         'business_slug': business['slug'],
         'qr_source_id': qr['id'],
         'campaign': qr.get('campaign', ''),
+        # Source tracking
+        'entry_source_type': 'qr',
+        'entry_source_id': qr['id'],
+        'entry_source_label': qr.get('source_label', '') or qr.get('description', ''),
+        'entry_campaign': qr.get('campaign', ''),
+        # Customer
         'customer_name': '',
         'customer_phone': '',
-        'route_id': '',
+        'customer_card_media_id': '',
+        # Route
+        'route_id': preselected_route_id,
+        'route_distance_value': route_distance_value,
+        'route_distance_unit': route_distance_unit,
         'current_checkpoint_id': '',
         'current_checkpoint_order': 0,
+        # Status
         'status': 'active',
         'arrived_building': False,
         'arrived_destination': False,
         'device_info': req.device_info,
+        'started_at': '',
+        'completed_at': '',
+        'abandoned_at': '',
+        # Help
         'help_requested': False,
         'callback_requested': False,
+        # Location
+        'location_consent_granted': False,
+        'location_consent_at': '',
+        'location_permission_state': 'unknown',
+        'last_known_lat': 0.0,
+        'last_known_lng': 0.0,
+        'last_known_location_text': '',
+        'last_location_at': '',
+        # Assistance
+        'assigned_helpdesk_user_id': '',
+        'assistance_mode': '',
+        'assistance_status': '',
+        'last_recovery_checkpoint_id': '',
         'last_activity': now_utc().isoformat(),
         'created_at': now_utc().isoformat()
     }
     await db.sessions.insert_one(session)
     
-    await log_event(session['id'], business['id'], 'qr_scan', {'qr_code': req.qr_code, 'campaign': qr.get('campaign', '')})
+    await log_event(session['id'], business['id'], 'customer_opened', {
+        'qr_code': req.qr_code, 'campaign': qr.get('campaign', ''),
+        'entry_mode': qr.get('entry_mode', 'fast'),
+    })
+    
+    # Notify helpdesk immediately
+    await notify_helpdesk({
+        'type': 'customer_opened',
+        'session_id': session['id'],
+        'business_name': business['name'],
+        'business_id': business['id'],
+        'source_label': qr.get('source_label', '') or qr.get('description', ''),
+        'timestamp': now_utc().isoformat(),
+    })
     
     return {
         'session': serialize_doc(session),
-        'business': serialize_doc(business)
+        'business': serialize_doc(business),
+        'entry_mode': qr.get('entry_mode', 'fast'),
+        'default_route_id': preselected_route_id,
     }
 
 @api_router.get("/sessions/{session_id}")
@@ -575,6 +628,11 @@ async def admin_create_route(data: dict, _user: dict = Depends(require_admin_or_
         'start_label': data.get('start_label', ''),
         'difficulty': data.get('difficulty', 'easy'),
         'estimated_time_minutes': data.get('estimated_time_minutes', 15),
+        'distance_value': data.get('distance_value', 0.0),
+        'distance_unit': data.get('distance_unit', 'km'),
+        'distance_label': data.get('distance_label', ''),
+        'route_video_media_id': data.get('route_video_media_id', ''),
+        'offline_pack_enabled': data.get('offline_pack_enabled', False),
         'checkpoint_count': 0,
         'status': data.get('status', 'draft'),
         'created_by': data.get('created_by', ''),
@@ -1293,10 +1351,427 @@ async def where_am_i(data: dict):
     
     return {'matches': matches[:5]}
 
+# ========== PUBLIC: Location Consent + Updates ==========
+@api_router.post("/sessions/{session_id}/location-consent")
+async def update_location_consent(session_id: str, data: dict):
+    """Customer grants or denies location permission."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    granted = data.get('granted', False)
+    state = 'granted' if granted else 'denied'
+    update = {
+        'location_consent_granted': granted,
+        'location_consent_at': now_utc().isoformat(),
+        'location_permission_state': state,
+        'last_activity': now_utc().isoformat(),
+    }
+    await db.sessions.update_one({'id': session_id}, {'$set': update})
+    event_type = 'location_consent_granted' if granted else 'location_consent_denied'
+    await log_event(session_id, session['business_id'], event_type, {'state': state})
+    if granted:
+        await notify_helpdesk({
+            'type': 'location_consent_granted',
+            'session_id': session_id,
+            'customer_name': session.get('customer_name', ''),
+            'timestamp': now_utc().isoformat(),
+        })
+    return {'status': 'ok', 'location_permission_state': state}
+
+@api_router.post("/sessions/{session_id}/location-update")
+async def update_location(session_id: str, data: dict):
+    """Periodic location update from customer."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.get('location_consent_granted'):
+        raise HTTPException(status_code=403, detail="Location consent not granted")
+    update = {
+        'last_known_lat': data.get('lat', 0.0),
+        'last_known_lng': data.get('lng', 0.0),
+        'last_known_location_text': data.get('location_text', ''),
+        'last_location_at': now_utc().isoformat(),
+        'location_permission_state': 'granted',
+        'last_activity': now_utc().isoformat(),
+    }
+    await db.sessions.update_one({'id': session_id}, {'$set': update})
+    return {'status': 'ok'}
+
+# ========== PUBLIC: Route Selection with Distance ==========
+@api_router.post("/sessions/{session_id}/select-route")
+async def select_route(session_id: str, data: dict):
+    """Customer selects a route. Stores route distance from trainer data."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    route_id = data.get('route_id', '')
+    route = await db.routes.find_one({'id': route_id, 'status': 'published'}, {'_id': 0})
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found or not published")
+    update = {
+        'route_id': route_id,
+        'route_distance_value': route.get('distance_value', 0.0),
+        'route_distance_unit': route.get('distance_unit', 'km'),
+        'started_at': now_utc().isoformat(),
+        'last_activity': now_utc().isoformat(),
+    }
+    await db.sessions.update_one({'id': session_id}, {'$set': update})
+    await log_event(session_id, session['business_id'], 'route_selected', {
+        'route_id': route_id, 'route_name': route['name'],
+        'distance_value': route.get('distance_value', 0),
+        'distance_unit': route.get('distance_unit', 'km'),
+    })
+    await notify_helpdesk({
+        'type': 'navigation_started',
+        'session_id': session_id,
+        'customer_name': session.get('customer_name', ''),
+        'route_name': route['name'],
+        'business_id': session['business_id'],
+        'timestamp': now_utc().isoformat(),
+    })
+    return {'status': 'ok', 'route': serialize_doc(route)}
+
+# ========== PUBLIC: Session Recovery ==========
+@api_router.post("/sessions/{session_id}/recover")
+async def session_recover(session_id: str, data: dict):
+    """Customer confirms they see a checkpoint — resume navigation from there."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    checkpoint_id = data.get('checkpoint_id', '')
+    cp = await db.checkpoints.find_one({'id': checkpoint_id}, {'_id': 0})
+    if not cp:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    update = {
+        'current_checkpoint_id': checkpoint_id,
+        'current_checkpoint_order': cp.get('order', 0),
+        'last_recovery_checkpoint_id': checkpoint_id,
+        'last_activity': now_utc().isoformat(),
+    }
+    await db.sessions.update_one({'id': session_id}, {'$set': update})
+    await log_event(session_id, session['business_id'], 'recovery_matched', {
+        'checkpoint_id': checkpoint_id, 'checkpoint_name': cp['name'],
+    })
+    return {'status': 'ok', 'checkpoint': serialize_doc(cp)}
+
+# ========== PUBLIC: Recovery Candidates ==========
+@api_router.get("/sessions/{session_id}/recovery-candidates")
+async def get_recovery_candidates(session_id: str):
+    """Get checkpoint candidates for picture-based recovery."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    route_id = session.get('route_id', '')
+    if not route_id:
+        raise HTTPException(status_code=400, detail="No route selected")
+    cps = await db.checkpoints.find(
+        {'route_id': route_id}, {'_id': 0}
+    ).sort('order', 1).to_list(100)
+    return serialize_doc(cps)
+
+# ========== PUBLIC: Assist Event Logging ==========
+@api_router.post("/sessions/{session_id}/assist-event")
+async def log_assist_event(session_id: str, data: dict):
+    """Log WhatsApp/call/video assist events."""
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    event_type = data.get('event_type', '')
+    valid_types = [
+        'whatsapp_video_attempted', 'whatsapp_video_fallback_chat',
+        'whatsapp_chat', 'phone_call', 'whatsapp_video_started',
+        'whatsapp_video_ended',
+    ]
+    if event_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Invalid assist event type. Valid: {valid_types}")
+    # Update assistance mode on session
+    mode_map = {
+        'whatsapp_video_attempted': 'whatsapp_video',
+        'whatsapp_video_started': 'whatsapp_video',
+        'whatsapp_chat': 'whatsapp_chat',
+        'whatsapp_video_fallback_chat': 'whatsapp_chat',
+        'phone_call': 'phone_call',
+    }
+    status_map = {
+        'whatsapp_video_ended': 'ended',
+    }
+    update = {'last_activity': now_utc().isoformat()}
+    if event_type in mode_map:
+        update['assistance_mode'] = mode_map[event_type]
+        update['assistance_status'] = 'active'
+    if event_type in status_map:
+        update['assistance_status'] = status_map[event_type]
+    await db.sessions.update_one({'id': session_id}, {'$set': update})
+    await log_event(session_id, session['business_id'], event_type, data.get('event_data', {}))
+    await notify_helpdesk({
+        'type': event_type,
+        'session_id': session_id,
+        'customer_name': session.get('customer_name', ''),
+        'business_id': session['business_id'],
+        'timestamp': now_utc().isoformat(),
+    })
+    return {'status': 'ok'}
+
+# ========== HELPDESK: Live Customer Queue ==========
+@api_router.get("/helpdesk/live-customers")
+async def helpdesk_live_customers(_user: dict = Depends(require_admin_or_helpdesk)):
+    """Get all active sessions with enriched data for helpdesk console."""
+    sessions = await db.sessions.find({'status': 'active'}, {'_id': 0}).sort('last_activity', -1).to_list(200)
+    # Batch lookups
+    biz_ids = list(set(s.get('business_id', '') for s in sessions if s.get('business_id')))
+    route_ids = list(set(s.get('route_id', '') for s in sessions if s.get('route_id')))
+    cp_ids = list(set(s.get('current_checkpoint_id', '') for s in sessions if s.get('current_checkpoint_id')))
+    biz_lookup = {}
+    if biz_ids:
+        for b in await db.businesses.find({'id': {'$in': biz_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'slug': 1, 'contact_phone': 1, 'contact_whatsapp': 1}).to_list(len(biz_ids)):
+            biz_lookup[b['id']] = b
+    route_lookup = {}
+    if route_ids:
+        for r in await db.routes.find({'id': {'$in': route_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'distance_value': 1, 'distance_unit': 1, 'distance_label': 1}).to_list(len(route_ids)):
+            route_lookup[r['id']] = r
+    cp_lookup = {}
+    if cp_ids:
+        for c in await db.checkpoints.find({'id': {'$in': cp_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'order': 1}).to_list(len(cp_ids)):
+            cp_lookup[c['id']] = c
+    # Pending help cases
+    open_cases = await db.helpdesk_cases.find({'status': {'$in': ['open', 'acknowledged', 'in_progress']}}, {'_id': 0, 'session_id': 1, 'case_type': 1}).to_list(500)
+    help_sessions = set(c['session_id'] for c in open_cases)
+    result = []
+    for s in sessions:
+        biz = biz_lookup.get(s.get('business_id', ''), {})
+        route = route_lookup.get(s.get('route_id', ''), {})
+        cp = cp_lookup.get(s.get('current_checkpoint_id', ''), {})
+        result.append({
+            **serialize_doc(s),
+            'business_name': biz.get('name', ''),
+            'business_slug': biz.get('slug', ''),
+            'route_name': route.get('name', ''),
+            'route_distance_value': route.get('distance_value', 0),
+            'route_distance_unit': route.get('distance_unit', ''),
+            'route_distance_label': route.get('distance_label', ''),
+            'current_checkpoint_name': cp.get('name', ''),
+            'current_checkpoint_order': cp.get('order', 0),
+            'has_open_help': s.get('id', '') in help_sessions,
+            'contact_phone': biz.get('contact_phone', ''),
+            'contact_whatsapp': biz.get('contact_whatsapp', ''),
+        })
+    return result
+
+# ========== HELPDESK: Claim/Unclaim Session ==========
+@api_router.post("/helpdesk/sessions/{session_id}/claim")
+async def helpdesk_claim_session(session_id: str, _user: dict = Depends(require_admin_or_helpdesk)):
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.sessions.update_one({'id': session_id}, {'$set': {
+        'assigned_helpdesk_user_id': _user.get('id', ''),
+        'last_activity': now_utc().isoformat(),
+    }})
+    return {'status': 'claimed', 'assigned_to': _user.get('username', '')}
+
+@api_router.post("/helpdesk/sessions/{session_id}/unclaim")
+async def helpdesk_unclaim_session(session_id: str, _user: dict = Depends(require_admin_or_helpdesk)):
+    session = await db.sessions.find_one({'id': session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.sessions.update_one({'id': session_id}, {'$set': {
+        'assigned_helpdesk_user_id': '',
+        'last_activity': now_utc().isoformat(),
+    }})
+    return {'status': 'unclaimed'}
+
+# ========== ADMIN: Reports & Export ==========
+@api_router.get("/admin/reports/sessions")
+async def admin_report_sessions(
+    status: str = None, route_id: str = None, business_id: str = None,
+    source_id: str = None, date_from: str = None, date_to: str = None,
+    assigned_to: str = None, limit: int = 500,
+    _user: dict = Depends(require_admin),
+):
+    """Session report with filters for admin export."""
+    query = {}
+    if status:
+        query['status'] = status
+    if route_id:
+        query['route_id'] = route_id
+    if business_id:
+        query['business_id'] = business_id
+    if source_id:
+        query['qr_source_id'] = source_id
+    if assigned_to:
+        query['assigned_helpdesk_user_id'] = assigned_to
+    if date_from or date_to:
+        date_q = {}
+        if date_from:
+            date_q['$gte'] = date_from
+        if date_to:
+            date_q['$lte'] = date_to
+        query['created_at'] = date_q
+    sessions = await db.sessions.find(query, {'_id': 0}).sort('created_at', -1).to_list(limit)
+    # Enrich with route names
+    route_ids = list(set(s.get('route_id', '') for s in sessions if s.get('route_id')))
+    route_lookup = {}
+    if route_ids:
+        for r in await db.routes.find({'id': {'$in': route_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(route_ids)):
+            route_lookup[r['id']] = r['name']
+    result = []
+    for s in sessions:
+        result.append({**serialize_doc(s), 'route_name': route_lookup.get(s.get('route_id', ''), '')})
+    return result
+
+@api_router.get("/admin/reports/export")
+async def admin_export_report(
+    format: str = "csv",
+    status: str = None, route_id: str = None, business_id: str = None,
+    date_from: str = None, date_to: str = None, limit: int = 1000,
+    _user: dict = Depends(require_admin),
+):
+    """Export session data as CSV or XLSX."""
+    query = {}
+    if status:
+        query['status'] = status
+    if route_id:
+        query['route_id'] = route_id
+    if business_id:
+        query['business_id'] = business_id
+    if date_from or date_to:
+        date_q = {}
+        if date_from:
+            date_q['$gte'] = date_from
+        if date_to:
+            date_q['$lte'] = date_to
+        query['created_at'] = date_q
+    sessions = await db.sessions.find(query, {'_id': 0}).sort('created_at', -1).to_list(limit)
+    # Enrich
+    route_ids = list(set(s.get('route_id', '') for s in sessions if s.get('route_id')))
+    route_lookup = {}
+    if route_ids:
+        for r in await db.routes.find({'id': {'$in': route_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(route_ids)):
+            route_lookup[r['id']] = r['name']
+    columns = [
+        'id', 'customer_name', 'customer_phone', 'business_slug', 'route_name',
+        'route_distance_value', 'route_distance_unit', 'status',
+        'entry_source_label', 'entry_campaign', 'started_at', 'completed_at',
+        'location_permission_state', 'assigned_helpdesk_user_id', 'created_at',
+    ]
+    rows = []
+    for s in sessions:
+        row = {c: s.get(c, '') for c in columns}
+        row['route_name'] = route_lookup.get(s.get('route_id', ''), '')
+        rows.append(row)
+    if format == 'xlsx':
+        try:
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'Sessions'
+            ws.append(columns)
+            for row in rows:
+                ws.append([row.get(c, '') for c in columns])
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            return Response(
+                content=buf.getvalue(),
+                media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                headers={'Content-Disposition': 'attachment; filename="sessions_report.xlsx"'},
+            )
+        except ImportError:
+            raise HTTPException(status_code=500, detail="openpyxl not installed for XLSX export")
+    else:
+        import csv as csv_mod
+        buf = io.StringIO()
+        writer = csv_mod.DictWriter(buf, fieldnames=columns)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+        return Response(
+            content=buf.getvalue(),
+            media_type='text/csv',
+            headers={'Content-Disposition': 'attachment; filename="sessions_report.csv"'},
+        )
+
+# ========== ADMIN: Enhanced Stats ==========
+@api_router.get("/admin/stats/enhanced")
+async def admin_enhanced_stats(business_id: str = None, _user: dict = Depends(require_admin)):
+    """Central KPIs for admin dashboard."""
+    query = {}
+    if business_id:
+        query['business_id'] = business_id
+    total = await db.sessions.count_documents(query)
+    active = await db.sessions.count_documents({**query, 'status': 'active'})
+    completed = await db.sessions.count_documents({**query, 'status': 'completed'})
+    abandoned = await db.sessions.count_documents({**query, 'status': 'abandoned'})
+    terminated = await db.sessions.count_documents({**query, 'status': 'terminated'})
+    help_pending = await db.helpdesk_cases.count_documents({
+        **({'business_id': business_id} if business_id else {}),
+        'status': {'$in': ['open', 'acknowledged']},
+    })
+    assisted = await db.sessions.count_documents({**query, 'status': 'active', 'assistance_status': 'active'})
+    # Route-wise usage
+    route_pipeline = [
+        {'$match': {**query, 'route_id': {'$ne': ''}}},
+        {'$group': {'_id': '$route_id', 'count': {'$sum': 1}}},
+        {'$sort': {'count': -1}},
+        {'$limit': 10},
+    ]
+    route_usage = []
+    async for doc in db.sessions.aggregate(route_pipeline):
+        route = await db.routes.find_one({'id': doc['_id']}, {'_id': 0, 'name': 1})
+        route_usage.append({'route_id': doc['_id'], 'route_name': route.get('name', '') if route else '', 'count': doc['count']})
+    # Source-wise usage
+    source_pipeline = [
+        {'$match': {**query, 'qr_source_id': {'$ne': ''}}},
+        {'$group': {'_id': '$qr_source_id', 'count': {'$sum': 1}}},
+        {'$sort': {'count': -1}},
+        {'$limit': 10},
+    ]
+    source_usage = []
+    async for doc in db.sessions.aggregate(source_pipeline):
+        qr = await db.qr_sources.find_one({'id': doc['_id']}, {'_id': 0, 'code': 1, 'source_label': 1, 'campaign': 1})
+        source_usage.append({
+            'source_id': doc['_id'],
+            'source_code': qr.get('code', '') if qr else '',
+            'source_label': qr.get('source_label', '') if qr else '',
+            'count': doc['count'],
+        })
+    return {
+        'total_sessions': total,
+        'active_sessions': active,
+        'completed_sessions': completed,
+        'abandoned_sessions': abandoned,
+        'terminated_sessions': terminated,
+        'help_pending': help_pending,
+        'currently_assisted': assisted,
+        'route_usage': route_usage,
+        'source_usage': source_usage,
+    }
+
+# ========== ADMIN: User Performance ==========
+@api_router.get("/admin/users/{user_id}/performance")
+async def admin_user_performance(user_id: str, _user: dict = Depends(require_admin)):
+    """Helpdesk user performance metrics."""
+    user = await db.users.find_one({'id': user_id}, {'_id': 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    customers_handled = await db.sessions.count_documents({'assigned_helpdesk_user_id': user_id})
+    cases_handled = await db.helpdesk_cases.count_documents({'assigned_to': user_id})
+    cases_resolved = await db.helpdesk_cases.count_documents({'assigned_to': user_id, 'status': 'resolved'})
+    completions_assisted = await db.sessions.count_documents({
+        'assigned_helpdesk_user_id': user_id, 'status': 'completed',
+    })
+    return {
+        'user': serialize_doc(user),
+        'customers_handled': customers_handled,
+        'cases_handled': cases_handled,
+        'cases_resolved': cases_resolved,
+        'completions_assisted': completions_assisted,
+    }
+
 # ========== Root ==========
 @api_router.get("/")
 async def root():
-    return {"message": "Yash Ornaments WayFinder API", "version": "2.0.0"}
+    return {"message": "Yash Ornaments WayFinder API", "version": "3.0.0"}
 
 # ========== MEDIA UPLOAD + WATERMARK ==========
 @api_router.post("/media/upload")
@@ -1612,10 +2087,18 @@ async def get_qr_info(qr_code: str):
     
     branding = await db.branding_settings.find_one({}, {'_id': 0})
     
+    # Fetch default route info if set
+    default_route = None
+    if qr.get('default_route_id'):
+        default_route = await db.routes.find_one({'id': qr['default_route_id'], 'status': 'published'}, {'_id': 0})
+    
     return {
         'qr_code': qr_code,
         'business': serialize_doc(business),
         'branding_footer': branding.get('branding_footer', 'Navigation powered by YASH ORNAMENTS') if branding else 'Navigation powered by YASH ORNAMENTS',
+        'entry_mode': qr.get('entry_mode', 'fast'),
+        'source_label': qr.get('source_label', ''),
+        'default_route': serialize_doc(default_route),
     }
 
 @api_router.post("/scan/{qr_code}/register")
@@ -1638,37 +2121,80 @@ async def register_from_scan(qr_code: str, data: dict):
     # Increment scan count
     await db.qr_sources.update_one({'code': qr_code}, {'$inc': {'scan_count': 1}})
     
-    # Create session with customer info pre-filled
+    preselected_route_id = qr.get('default_route_id', '')
+    route_distance_value = 0.0
+    route_distance_unit = ''
+    if preselected_route_id:
+        route = await db.routes.find_one({'id': preselected_route_id, 'status': 'published'}, {'_id': 0})
+        if route:
+            route_distance_value = route.get('distance_value', 0.0)
+            route_distance_unit = route.get('distance_unit', 'km')
+    
     session = {
         'id': gen_id(),
         'business_id': business['id'],
         'business_slug': business['slug'],
         'qr_source_id': qr['id'],
         'campaign': qr.get('campaign', ''),
+        'entry_source_type': 'qr',
+        'entry_source_id': qr['id'],
+        'entry_source_label': qr.get('source_label', '') or qr.get('description', ''),
+        'entry_campaign': qr.get('campaign', ''),
         'customer_name': customer_name,
         'customer_phone': customer_phone,
-        'route_id': '',
+        'customer_card_media_id': data.get('customer_card_media_id', ''),
+        'route_id': preselected_route_id,
+        'route_distance_value': route_distance_value,
+        'route_distance_unit': route_distance_unit,
         'current_checkpoint_id': '',
         'current_checkpoint_order': 0,
         'status': 'active',
         'arrived_building': False,
         'arrived_destination': False,
         'device_info': data.get('device_info', ''),
+        'started_at': '',
+        'completed_at': '',
+        'abandoned_at': '',
         'help_requested': False,
         'callback_requested': False,
+        'location_consent_granted': False,
+        'location_consent_at': '',
+        'location_permission_state': 'unknown',
+        'last_known_lat': 0.0,
+        'last_known_lng': 0.0,
+        'last_known_location_text': '',
+        'last_location_at': '',
+        'assigned_helpdesk_user_id': '',
+        'assistance_mode': '',
+        'assistance_status': '',
+        'last_recovery_checkpoint_id': '',
         'last_activity': now_utc().isoformat(),
         'created_at': now_utc().isoformat(),
     }
     await db.sessions.insert_one(session)
     
-    await log_event(session['id'], business['id'], 'qr_scan', {
+    await log_event(session['id'], business['id'], 'customer_opened', {
         'qr_code': qr_code, 'campaign': qr.get('campaign', ''),
-        'customer_name': customer_name
+        'customer_name': customer_name,
+        'entry_mode': 'assisted',
+    })
+    
+    await notify_helpdesk({
+        'type': 'customer_opened',
+        'session_id': session['id'],
+        'business_name': business['name'],
+        'business_id': business['id'],
+        'customer_name': customer_name,
+        'customer_phone': customer_phone,
+        'source_label': qr.get('source_label', '') or qr.get('description', ''),
+        'timestamp': now_utc().isoformat(),
     })
     
     return {
         'session': serialize_doc(session),
         'business': serialize_doc(business),
+        'entry_mode': qr.get('entry_mode', 'fast'),
+        'default_route_id': preselected_route_id,
     }
 
 # ========== PUBLIC: Branding info ==========

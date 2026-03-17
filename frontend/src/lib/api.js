@@ -47,6 +47,28 @@ export const getSessionEvents = (sessionId) =>
 export const requestCallback = (sessionId, data) =>
   API.post(`/sessions/${sessionId}/callback`, data);
 
+// Location consent + updates
+export const updateLocationConsent = (sessionId, granted) =>
+  API.post(`/sessions/${sessionId}/location-consent`, { granted });
+
+export const updateLocation = (sessionId, lat, lng, locationText = '') =>
+  API.post(`/sessions/${sessionId}/location-update`, { lat, lng, location_text: locationText });
+
+// Route selection with distance
+export const selectRoute = (sessionId, routeId) =>
+  API.post(`/sessions/${sessionId}/select-route`, { route_id: routeId });
+
+// Session recovery
+export const getRecoveryCandidates = (sessionId) =>
+  API.get(`/sessions/${sessionId}/recovery-candidates`);
+
+export const recoverSession = (sessionId, checkpointId) =>
+  API.post(`/sessions/${sessionId}/recover`, { checkpoint_id: checkpointId });
+
+// Assist events (WhatsApp/call)
+export const logAssistEvent = (sessionId, eventType, eventData = {}) =>
+  API.post(`/sessions/${sessionId}/assist-event`, { event_type: eventType, event_data: eventData });
+
 // ---- Routes ----
 export const getRoutes = () => API.get('/routes');
 export const getRoute = (routeId) => API.get(`/routes/${routeId}`);
@@ -113,6 +135,22 @@ export const adminGetAnalytics = (businessId, days) => {
   return API.get(url);
 };
 export const adminGetAuditLogs = () => API.get('/admin/audit-logs');
+export const adminGetEnhancedStats = (businessId) => {
+  let url = '/admin/stats/enhanced';
+  if (businessId) url += `?business_id=${businessId}`;
+  return API.get(url);
+};
+export const adminGetReportSessions = (params = {}) => {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) q.append(k, v); });
+  return API.get(`/admin/reports/sessions?${q.toString()}`);
+};
+export const adminExportReport = (format = 'csv', params = {}) => {
+  const q = new URLSearchParams({ format });
+  Object.entries(params).forEach(([k, v]) => { if (v) q.append(k, v); });
+  return API.get(`/admin/reports/export?${q.toString()}`, { responseType: 'blob' });
+};
+export const adminGetUserPerformance = (userId) => API.get(`/admin/users/${userId}/performance`);
 
 // ---- Helpdesk ----
 export const helpdeskGetCases = (status, businessId) => {
@@ -124,6 +162,9 @@ export const helpdeskGetCases = (status, businessId) => {
 export const helpdeskGetCaseDetail = (caseId) => API.get(`/helpdesk/cases/${caseId}`);
 export const helpdeskCaseAction = (caseId, action, note) => API.post(`/helpdesk/cases/${caseId}/action`, { action, note });
 export const helpdeskGetCallbacks = (status) => API.get(`/helpdesk/callbacks${status ? `?status=${status}` : ''}`);
+export const helpdeskGetLiveCustomers = () => API.get('/helpdesk/live-customers');
+export const helpdeskClaimSession = (sessionId) => API.post(`/helpdesk/sessions/${sessionId}/claim`);
+export const helpdeskUnclaimSession = (sessionId) => API.post(`/helpdesk/sessions/${sessionId}/unclaim`);
 
 // ---- LLM ----
 export const llmSuggestCheckpoint = (text, type = 'checkpoint') => API.post('/llm/suggest-checkpoint', { text, type });
