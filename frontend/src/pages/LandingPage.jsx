@@ -158,8 +158,8 @@ export default function LandingPage() {
                   <Button variant="outline" size="sm" onClick={() => navigate('/help')} data-testid="landing-help-button">
                     <HelpCircle className="w-4 h-4 mr-1" /> Help Me
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/tutorial')} data-testid="landing-tutorial-button">
-                    ऐप गाइड
+                  <Button variant="outline" size="sm" onClick={() => navigate('/help-guide')} data-testid="landing-help-guide-button">
+                    <HelpCircle className="w-4 h-4 mr-1" /> Help Guide
                   </Button>
                 </div>
               </CardContent>
@@ -224,12 +224,9 @@ export default function LandingPage() {
             </CardContent>
           </Card>
 
-          <div className="text-center mt-6 space-y-2">
-            <button onClick={() => navigate('/tutorial')} className="text-sm text-[hsl(var(--brand))] hover:text-[hsl(var(--foreground))] transition-colors block mx-auto" data-testid="pre-session-tutorial-link">
-              ऐप गाइड / App Guide
-            </button>
-            <button onClick={() => navigate('/login')} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors block mx-auto" data-testid="staff-login-link">
-              Staff Login
+          <div className="text-center mt-6">
+            <button onClick={() => navigate('/help-guide')} className="text-sm text-[hsl(var(--brand))] hover:text-[hsl(var(--foreground))] transition-colors block mx-auto" data-testid="pre-session-help-guide-link">
+              Help Guide
             </button>
           </div>
         </motion.div>

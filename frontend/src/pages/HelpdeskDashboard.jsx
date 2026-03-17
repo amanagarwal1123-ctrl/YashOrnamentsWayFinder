@@ -193,6 +193,7 @@ export default function HelpdeskDashboard() {
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               {liveCustomers.length} live
             </span>
+            <Button variant="outline" size="sm" onClick={() => navigate('/manual/helpdesk')} data-testid="helpdesk-manual-link">Manual</Button>
             {user?.role === 'admin' && (
               <Button variant="outline" size="sm" onClick={() => navigate('/admin')} data-testid="go-admin">Admin</Button>
             )}

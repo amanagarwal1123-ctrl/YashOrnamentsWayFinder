@@ -26,12 +26,14 @@ import AdminAnalytics from '@/pages/AdminAnalytics';
 import AdminQRGeneration from '@/pages/AdminQRGeneration';
 import AdminBrandingSettings from '@/pages/AdminBrandingSettings';
 import AdminMediaManagement from '@/pages/AdminMediaManagement';
-import AdminTutorialPdf from '@/pages/AdminTutorialPdf';
+import AdminManualsPage from '@/pages/AdminManualsPage';
 import AdminReports from '@/pages/AdminReports';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
 import GoldRatePage from '@/pages/GoldRatePage';
 import GalleryPage from '@/pages/GalleryPage';
-import TutorialPage from '@/pages/TutorialPage';
+import HelpGuidePage from '@/pages/HelpGuidePage';
+import HelpdeskManualPage from '@/pages/HelpdeskManualPage';
+import TrainerManualPage from '@/pages/TrainerManualPage';
 
 function App() {
   return (
@@ -54,10 +56,18 @@ function App() {
           <Route path="/arrived" element={<ArrivalPage />} />
           <Route path="/gold-rates" element={<GoldRatePage />} />
           <Route path="/gallery" element={<GalleryPage />} />
-          
-          {/* Auth */}
-          <Route path="/login" element={<LoginPage />} />
-          
+
+          {/* Public Help Guide */}
+          <Route path="/help-guide" element={<HelpGuidePage />} />
+
+          {/* Staff Login */}
+          <Route path="/staff" element={<LoginPage />} />
+          <Route path="/login" element={<Navigate to="/staff" replace />} />
+
+          {/* Role-specific Manuals */}
+          <Route path="/manual/helpdesk" element={<HelpdeskManualPage />} />
+          <Route path="/manual/trainer" element={<TrainerManualPage />} />
+
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/routes" element={<AdminRoutes />} />
@@ -69,14 +79,15 @@ function App() {
           <Route path="/admin/branding" element={<AdminBrandingSettings />} />
           <Route path="/admin/media" element={<AdminMediaManagement />} />
           <Route path="/admin/reports" element={<AdminReports />} />
-          <Route path="/admin/tutorial-pdf" element={<AdminTutorialPdf />} />
-          
+          <Route path="/admin/manuals" element={<AdminManualsPage />} />
+
           {/* Helpdesk Routes */}
           <Route path="/helpdesk" element={<HelpdeskDashboard />} />
-          
-          {/* Tutorial */}
-          <Route path="/tutorial" element={<TutorialPage />} />
-          
+
+          {/* Legacy redirects */}
+          <Route path="/tutorial" element={<Navigate to="/help-guide" replace />} />
+          <Route path="/admin/tutorial-pdf" element={<Navigate to="/admin/manuals" replace />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

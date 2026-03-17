@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { Phone, MessageCircle, ArrowLeft, LogOut, Navigation, LayoutDashboard, Route, Users, Coins, BarChart3, Headphones, Menu, X, QrCode, Image, Palette, FileDown, BookOpen, FileText } from 'lucide-react';
+import { Phone, MessageCircle, ArrowLeft, LogOut, Navigation, LayoutDashboard, Route, Users, Coins, BarChart3, Headphones, Menu, X, QrCode, Image, Palette, BookOpen, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 
@@ -107,9 +107,26 @@ const ADMIN_NAV_ITEMS = [
   { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
   { id: 'reports', label: 'Reports & Export', icon: FileText, path: '/admin/reports' },
   { id: 'helpdesk', label: 'Helpdesk', icon: Headphones, path: '/helpdesk' },
-  { id: 'tutorial-pdf', label: 'Tutorial PDF', icon: FileDown, path: '/admin/tutorial-pdf' },
-  { id: 'tutorial', label: 'App Guide', icon: BookOpen, path: '/tutorial' },
+  { id: 'manuals', label: 'Manuals', icon: BookOpen, path: '/admin/manuals' },
 ];
+
+const getNavItemsForRole = (role) => {
+  if (role === 'admin') return ADMIN_NAV_ITEMS;
+  if (role === 'trainer') {
+    return [
+      { id: 'routes', label: 'Routes', icon: Route, path: '/admin/routes' },
+      { id: 'media', label: 'Media', icon: Image, path: '/admin/media' },
+      { id: 'manuals', label: 'Trainer Manual', icon: BookOpen, path: '/manual/trainer' },
+    ];
+  }
+  if (role === 'helpdesk') {
+    return [
+      { id: 'helpdesk', label: 'Helpdesk', icon: Headphones, path: '/helpdesk' },
+      { id: 'manuals', label: 'Helpdesk Manual', icon: BookOpen, path: '/manual/helpdesk' },
+    ];
+  }
+  return ADMIN_NAV_ITEMS;
+};
 
 const SidebarNavContent = ({ active, items, onNavigate, onLogout, testIdPrefix = '' }) => (
   <>
@@ -140,8 +157,10 @@ const SidebarNavContent = ({ active, items, onNavigate, onLogout, testIdPrefix =
 
 export const AdminSidebar = ({ active }) => {
   const navigate = useNavigate();
-  const { logoutUser } = useApp();
+  const { logoutUser, user } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const navItems = getNavItemsForRole(user?.role);
 
   const handleNavigate = (path) => {
     navigate(path);
@@ -154,7 +173,7 @@ export const AdminSidebar = ({ active }) => {
     setMobileOpen(false);
   };
 
-  const activeItem = ADMIN_NAV_ITEMS.find(i => i.id === active);
+  const activeItem = navItems.find(i => i.id === active);
 
   return (
     <>
@@ -166,7 +185,7 @@ export const AdminSidebar = ({ active }) => {
         </div>
         <SidebarNavContent
           active={active}
-          items={ADMIN_NAV_ITEMS}
+          items={navItems}
           onNavigate={handleNavigate}
           onLogout={handleLogout}
         />
@@ -208,7 +227,7 @@ export const AdminSidebar = ({ active }) => {
           <div className="flex flex-col h-[calc(100%-65px)]">
             <SidebarNavContent
               active={active}
-              items={ADMIN_NAV_ITEMS}
+              items={navItems}
               onNavigate={handleNavigate}
               onLogout={handleLogout}
               testIdPrefix="mobile-"
