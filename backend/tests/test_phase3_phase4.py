@@ -13,7 +13,7 @@ import requests
 import os
 import io
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://metro-routes-ui.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://helpdesk-live-3.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_CREDS = {"username": "admin", "otp": "admin123"}

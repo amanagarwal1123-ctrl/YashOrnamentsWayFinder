@@ -10,7 +10,7 @@ class BackendAPITester:
         if base_url is None:
             base_url = os.environ.get(
                 "REACT_APP_BACKEND_URL",
-                "https://metro-routes-ui.preview.emergentagent.com",
+                "https://helpdesk-live-3.preview.emergentagent.com",
             )
         self.base_url = f"{base_url}/api"
         self.session = requests.Session()
