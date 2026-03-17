@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
 import { AdminSidebar } from '@/components/shared';
 import { EmbeddedGuide } from '@/components/ScreenshotGuide';
@@ -7,13 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { customerGuideSteps, helpdeskGuideSteps, trainerGuideSteps, adminGuideSteps } from '@/data/guideData';
 
 export default function AdminManualsPage() {
-  const navigate = useNavigate();
   const { isLoggedIn, user } = useApp();
   const [tab, setTab] = useState('admin');
 
   if (!isLoggedIn || user?.role !== 'admin') {
-    navigate('/staff');
-    return null;
+    return <Navigate to="/staff" replace />;
   }
 
   const guides = [
