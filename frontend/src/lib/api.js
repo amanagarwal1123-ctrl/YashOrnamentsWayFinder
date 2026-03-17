@@ -179,6 +179,7 @@ export const createHelpdeskSSE = () => {
 
 // ---- Media ----
 export const uploadMedia = (formData) => API.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const uploadVisitingCard = (formData) => API.post('/public/upload-card', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const serveMediaUrl = (mediaId) => `${BACKEND_URL}/api/media/${mediaId}/serve`;
 export const placeholderMediaUrl = (label) => `${BACKEND_URL}/api/media/placeholder/${encodeURIComponent(label)}`;
 export const adminGetMedia = (params = {}) => {

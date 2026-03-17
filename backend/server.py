@@ -1826,6 +1826,39 @@ async def admin_user_performance(user_id: str, _user: dict = Depends(require_adm
 async def root():
     return {"message": "Yash Ornaments WayFinder API", "version": "3.0.0"}
 
+# ========== PUBLIC: Visiting Card Upload (Yash-only, optional) ==========
+@api_router.post("/public/upload-card")
+async def public_upload_card(file: UploadFile = File(...)):
+    """Public endpoint for customers to upload a visiting card photo. No auth required."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'png'
+    if file_ext not in {'jpg', 'jpeg', 'png', 'webp'}:
+        raise HTTPException(status_code=400, detail="Only image files accepted (jpg, png, webp)")
+    # 5 MB limit for cards
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
+    media_id = gen_id()
+    filename = f"{media_id}_card.{file_ext}"
+    file_path = ORIGINALS_DIR / filename
+    file_path.write_bytes(contents)
+    media_record = {
+        'id': media_id,
+        'filename': filename,
+        'original_filename': file.filename,
+        'media_type': 'visiting_card',
+        'file_ext': file_ext,
+        'file_size': len(contents),
+        'route_id': '',
+        'checkpoint_id': '',
+        'uploaded_by': 'customer',
+        'watermarked': False,
+        'created_at': now_utc().isoformat(),
+    }
+    await db.media_files.insert_one(media_record)
+    return serialize_doc(media_record)
+
 # ========== MEDIA UPLOAD + WATERMARK ==========
 @api_router.post("/media/upload")
 async def upload_media(

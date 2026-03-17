@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Users, Navigation, AlertTriangle, Phone, MapPin, Activity, Eye,
-  TrendingUp, CheckCircle2, XCircle, UserCheck, BarChart3
+  TrendingUp, CheckCircle2, XCircle, UserCheck, BarChart3, Locate, Clock
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -174,69 +174,99 @@ export default function AdminDashboard() {
             </Card>
           </div>
 
-          {/* Live Sessions */}
+          {/* Live Sessions — location-based monitoring */}
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold">Live Customer Sessions</h2>
-                <Tabs value={businessFilter} onValueChange={setBusinessFilter}>
-                  <TabsList className="h-8">
-                    <TabsTrigger value="all" className="text-xs h-7">All</TabsTrigger>
-                    <TabsTrigger value="ajpl" className="text-xs h-7">
-                      <span className="w-2 h-2 rounded-full bg-[hsl(var(--gold))] mr-1" /> AJPL
-                    </TabsTrigger>
-                    <TabsTrigger value="yash" className="text-xs h-7">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 mr-1" /> Yash
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <h2 className="font-semibold">Live Customer Monitoring</h2>
+                <div className="flex items-center gap-2">
+                  <Tabs value={businessFilter} onValueChange={setBusinessFilter}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="all" className="text-xs h-7">All</TabsTrigger>
+                      <TabsTrigger value="ajpl" className="text-xs h-7">
+                        <span className="w-2 h-2 rounded-full bg-[hsl(var(--gold))] mr-1" /> AJPL
+                      </TabsTrigger>
+                      <TabsTrigger value="yash" className="text-xs h-7">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 mr-1" /> Yash
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </div>
 
-              <div className="relative bg-[hsl(var(--muted))] rounded-xl p-4 mb-4 min-h-[180px]" data-testid="admin-live-session-map">
-                {filteredSessions.length === 0 ? (
-                  <div className="flex items-center justify-center h-[160px] text-sm text-[hsl(var(--muted-foreground))]">
-                    <MapPin className="w-5 h-5 mr-2" /> No active sessions
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-4 md:grid-cols-6 gap-3 py-4">
-                    {filteredSessions.map(s => (
-                      <motion.div
-                        key={s.id}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="flex flex-col items-center cursor-pointer group"
-                        title={`${s.business_slug?.toUpperCase()} | ${s.current_checkpoint_name || 'Starting'} | ${s.customer_name || 'Anonymous'}`}
-                      >
-                        <div className={`w-5 h-5 rounded-full ${s.business_slug === 'ajpl' ? 'dot-ajpl' : 'dot-yash'} ${s.help_requested ? 'pulse-dot' : ''} group-hover:ring-2 ring-[hsl(var(--foreground))] transition-all`} />
-                        <span className="text-[8px] text-[hsl(var(--muted-foreground))] mt-1 truncate max-w-[60px]">
-                          {s.current_checkpoint_name || 'Start'}
-                        </span>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2 max-h-[300px] overflow-auto">
-                {filteredSessions.map(s => (
-                  <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[hsl(var(--muted))] cursor-pointer transition-colors" data-testid="live-session-row">
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${s.business_slug === 'ajpl' ? 'dot-ajpl' : 'dot-yash'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {s.customer_name || 'Anonymous'}
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1 font-mono">{s.id.slice(0, 8)}</span>
-                      </p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {s.current_checkpoint_name || 'Not started'} - Step {s.current_checkpoint_order || 0}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {s.help_requested && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">HELP</span>}
-                      <StatusBadge status={s.status} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {filteredSessions.length === 0 ? (
+                <div className="flex items-center justify-center h-[120px] text-sm text-[hsl(var(--muted-foreground))]" data-testid="admin-live-session-map">
+                  <MapPin className="w-5 h-5 mr-2" /> No active sessions
+                </div>
+              ) : (
+                <div className="overflow-auto max-h-[460px]" data-testid="admin-live-session-map">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-[hsl(var(--card))]">
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-2 font-medium">Customer</th>
+                        <th className="text-left py-2 px-2 font-medium">Checkpoint</th>
+                        <th className="text-left py-2 px-2 font-medium">GPS</th>
+                        <th className="text-left py-2 px-2 font-medium">Last Location</th>
+                        <th className="text-left py-2 px-2 font-medium">Activity</th>
+                        <th className="text-left py-2 px-2 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSessions.map(s => {
+                        const hasGps = s.last_known_lat && s.last_known_lat !== 0;
+                        const timeSince = s.last_activity ? (() => {
+                          const d = (Date.now() - new Date(s.last_activity).getTime()) / 60000;
+                          return d < 1 ? 'now' : d < 60 ? `${Math.floor(d)}m` : `${Math.floor(d/60)}h`;
+                        })() : '-';
+                        return (
+                          <tr key={s.id} className="border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] transition-colors" data-testid="live-session-row">
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.business_slug === 'ajpl' ? 'dot-ajpl' : 'dot-yash'}`} />
+                                <span className="font-medium truncate max-w-[100px]">{s.customer_name || 'Anon'}</span>
+                              </div>
+                              {s.customer_phone && <p className="text-[10px] font-mono text-[hsl(var(--muted-foreground))] mt-0.5">{s.customer_phone}</p>}
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="truncate max-w-[120px] block">{s.current_checkpoint_name || 'Not started'}</span>
+                              <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Step {s.current_checkpoint_order || 0}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              {hasGps ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1 text-green-700"><Locate className="w-3 h-3" /> On</span>
+                                  <p className="text-[10px] font-mono text-[hsl(var(--muted-foreground))] mt-0.5">
+                                    {s.last_known_lat.toFixed(4)}, {s.last_known_lng.toFixed(4)}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="text-[hsl(var(--muted-foreground))]">
+                                  {s.location_permission_state === 'denied' ? 'Denied' : s.location_permission_state === 'granted' ? 'Pending' : 'Unknown'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="truncate max-w-[140px] block text-[hsl(var(--muted-foreground))]">
+                                {s.last_known_location_text || (hasGps ? 'Coordinates only' : '-')}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {timeSince}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-1">
+                                {s.help_requested && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px]">HELP</span>}
+                                {s.callback_requested && <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 text-[10px]">CB</span>}
+                                <StatusBadge status={s.status} />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
 

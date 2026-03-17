@@ -4,11 +4,12 @@
 Navigation PWA guiding customers from Chandni Chowk origins to Yash Ornaments / AJPL. QR-driven sessions, step-by-step navigation, helpdesk support, admin CMS, media, schematic map, reports/export.
 
 ## Tech Stack
-- Backend: FastAPI (Python) on port 8001
-- Frontend: React (CRA + Craco) on port 3000
-- Database: MongoDB (motor)
+- Backend: FastAPI (Python 3.11) on port 8001
+- Frontend: React 18 (CRA + Craco) on port 3000
+- Database: MongoDB (motor 3.3)
 - Auth: JWT RBAC (admin, helpdesk, trainer)
-- Package: yarn
+- Package: yarn 1.22 with yarn.lock (frozen)
+- Build: `cd /app/frontend && yarn build` on Node v20.20.0
 
 ## Roles
 - **Admin**: Full access (dashboard, users, routes, media, reports, export, live monitoring)
@@ -16,110 +17,57 @@ Navigation PWA guiding customers from Chandni Chowk origins to Yash Ornaments / 
 - **Helpdesk**: Live customer queue, cases, claim/unclaim, notifications
 - **Customer**: Public navigation (QR/link entry)
 
-## Completed Batches
+## Completed
 
-### Batch A — Data Model + Backend Core (DONE)
+### Batch A — Data Model + Backend Core
 - Extended all models: Session, Route, Checkpoint, QRSource, HelpdeskCase
-- Added source tracking, location consent, assistance mode, recovery fields
-- New endpoints: consent, location-update, select-route, recovery, assist-event, live-customers, claim/unclaim, enhanced stats, reports, export, user performance
+- Source tracking, location consent, assistance mode, recovery fields
+- All backend endpoints for consent, location, select-route, recovery, assist-event, live-customers, claim/unclaim, enhanced stats, reports, export, user performance
 
-### Batch B — Customer Flow + Quick Actions (DONE - Mar 17, 2026)
-- Fast/assisted entry via QR scan (/scan/:code) with entry_mode support
-- Navigation Hub (/hub) with route selection, distance, time, video, map preview
-- Location consent dialog (grant/deny → continues in manual recovery mode)
-- Sticky quick-action bar on /navigate: Can't find, Where am I?, Need Help, More (Call, WhatsApp, WhatsApp Video, Share Location)
-- WhatsApp video handoff via deep-link with assist-event logging
-- Periodic location tracking when consent granted
+### Batch B — Customer Flow + Quick Actions (Mar 17)
+- Fast/assisted entry via QR scan (/scan/:code)
+- Navigation Hub (/hub): route selection, distance, time, video, map preview, "Save for Offline"
+- Location consent dialog (grant/deny → manual recovery mode)
+- Sticky quick-action bar: Can't find, Where am I?, Need Help, More (Call, WhatsApp, WhatsApp Video, Share Location)
+- WhatsApp video handoff via deep-link + assist-event logging
 
-### Batch C — Checkpoint Recovery / No-Location Fallback (DONE - Mar 17, 2026)
+### Batch C — Checkpoint Recovery (Mar 17)
 - Picture-based recovery flow at /recovery
 - "Do you see this place?" with checkpoint images/tags
-- Yes → resume navigation from that checkpoint
-- No match → escalation to helpdesk (Call, WhatsApp Video, Alert)
-- Recovery remains route-scoped
+- Resume from matched checkpoint or escalate to helpdesk
 
-### Batch D — Helpdesk Dashboard Upgrade (DONE - Mar 17, 2026)
+### Batch D — Helpdesk Dashboard Upgrade (Mar 17)
 - Queue categories: All, New, Active, Needs Help, Assisted, Recently Completed
-- Full customer details: name, phone, source, route, distance, checkpoint, location state, assignment
-- Quick actions: Call, WhatsApp, WhatsApp Video, Claim/Unclaim, Add Note, View Detail
+- Full customer details + quick actions (Call, WhatsApp, Video, Claim/Unclaim, Note, Detail)
 - Non-blocking SSE notifications
-- Session detail sheet
 
-### Batch E — Admin Dashboard + Reports + Export (DONE - Mar 17, 2026)
-- Enhanced KPIs: Total customers, Active, Successful visits, Incomplete, Help pending, Being assisted
-- Route-wise and source-wise usage charts
-- Helpdesk team performance with per-user dialog
-- Reports page (/admin/reports) with filters (status, route, business, date range)
-- CSV and XLSX export from filtered session data
-- RBAC enforced: trainers blocked from export
+### Batch E — Admin Dashboard + Reports + Export (Mar 17)
+- 6 KPI cards, route/source usage charts, helpdesk team performance
+- Reports page with filters + session table + CSV/XLSX export
+- RBAC enforced
 
-### Batch G — Offline Route Packs (DONE - Mar 17, 2026)
+### Batch G — Offline Route Packs (Mar 17)
 - Service worker (sw.js) with cache strategies
-- Network-first for API, cache-first for static assets
-- "Save for Offline" button on Navigation Hub
+- "Save for Offline" via navigator.serviceWorker.ready
 - Caches route data, checkpoint data, images, schematic map
-- Graceful degradation: video too large → images + instructions offline
 
-## Previous Phases (Completed)
-- Phase 1+1R: Hardening, reproducibility, JWT fail-fast
-- Phase 2: Admin Route CMS with DnD, duplicate, import/export
-- Phase 3: Media UX with drag-drop, library, filters
-- Phase 4: Schematic SVG map, list fallback
-- Tutorial PDF generator (Hindi+English)
-
-## Architecture
-```
-/app/backend/
-  server.py     — Main FastAPI app (all endpoints)
-  models.py     — Pydantic models
-  utils.py      — Serialization helpers
-  watermark.py  — Image watermarking
-  tutorial_pdf.py — PDF generation
-
-/app/frontend/src/
-  App.js         — Routes
-  lib/api.js     — All API calls
-  lib/context.js — App state
-  lib/offline.js — Service worker helper
-  pages/
-    ScanLandingPage.jsx    — QR entry (fast/assisted)
-    NavigationHub.jsx      — Route info + start navigation
-    CheckpointNavPage.jsx  — Step-by-step with quick actions
-    RecoveryPage.jsx       — Picture-based recovery
-    HelpdeskDashboard.jsx  — Queue-based helpdesk console
-    AdminDashboard.jsx     — KPIs + usage charts
-    AdminReports.jsx       — Reports & export
-    AdminRoutes.jsx        — Route CMS
-    AdminMediaManagement.jsx — Media library
-    SchematicMapPage.jsx   — Metro-style map
-  components/shared.jsx — Shared UI components
-  public/sw.js          — Service worker
-```
+### Cleanup Pass (Mar 17)
+1. **Offline SW**: Rewrote registration to use `serviceWorker.ready` — button appears on first load
+2. **Reports filters**: Strip `all_*` sentinel values before building request params
+3. **Visiting card upload**: Yash-only, optional, public /api/public/upload-card endpoint (no auth)
+4. **Admin live monitoring**: Replaced decorative dot grid with location-based table (Customer, Checkpoint, GPS coordinates, Last Location, Activity, Status)
+5. **Auth context**: Synchronous localStorage restore eliminates redirect race on hard navigation
+6. **Build**: Node v20.20.0, yarn 1.22.22, `yarn build` deterministic with yarn.lock
 
 ## Key API Endpoints
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | /scan/{qr}/info | Public | QR info with entry_mode |
-| POST | /scan/{qr}/register | Public | Assisted registration |
-| POST | /sessions/create | Public | Fast session create |
-| POST | /sessions/{id}/select-route | Public | Route selection |
-| POST | /sessions/{id}/location-consent | Public | Location grant/deny |
-| POST | /sessions/{id}/location-update | Public | Periodic GPS |
-| GET | /sessions/{id}/recovery-candidates | Public | Recovery checkpoints |
-| POST | /sessions/{id}/recover | Public | Resume from checkpoint |
-| POST | /sessions/{id}/assist-event | Public | Log assist events |
-| GET | /helpdesk/live-customers | Helpdesk+ | Live queue |
-| GET | /helpdesk/recent-completed | Helpdesk+ | Recent completed |
-| POST | /helpdesk/sessions/{id}/claim | Helpdesk+ | Claim session |
-| GET | /admin/stats/enhanced | Admin | KPIs + usage |
-| GET | /admin/reports/sessions | Admin | Filtered report |
-| GET | /admin/reports/export | Admin | CSV/XLSX download |
-| GET | /admin/users/{id}/performance | Admin | User performance |
+| POST | /api/public/upload-card | Public | Visiting card upload (Yash) |
+| GET | /api/helpdesk/recent-completed | Helpdesk+ | Recently completed sessions |
+| GET | /api/admin/stats/enhanced | Admin | KPIs + usage |
+| GET | /api/admin/reports/sessions | Admin | Filtered report |
+| GET | /api/admin/reports/export | Admin | CSV/XLSX download |
 
 ## Backlog
-- **P3: Batch F** — Route/media CMS polish (remaining UI enhancements)
-- Route distance shown as 'N/A' for routes without trainer-entered distance values
-
-## Testing
-- iteration_6.json: 100% backend (30/30), 100% frontend
-- All RBAC verified: trainer blocked from export, helpdesk blocked from admin stats
+- **Batch F**: Route/media CMS polish
+- Backend refactor: split server.py into APIRouter modules

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getQRInfo, registerFromScan, createSession } from '@/lib/api';
+import { getQRInfo, registerFromScan, createSession, uploadVisitingCard } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Navigation, User, Phone, MapPin, Shield, Loader2 } from 'lucide-react';
+import { Navigation, User, Phone, MapPin, Shield, Loader2, CreditCard, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -19,6 +19,8 @@ export default function ScanLandingPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
+  const [cardFile, setCardFile] = useState(null);
+  const [cardPreview, setCardPreview] = useState(null);
 
   useEffect(() => {
     if (!qrCode) { navigate('/'); return; }
@@ -52,9 +54,18 @@ export default function ScanLandingPage() {
     if (!phone.trim() || phone.length < 10) { toast.error('Please enter a valid phone number'); return; }
     setSubmitting(true);
     try {
+      // Upload visiting card if provided (Yash-only)
+      let cardMediaId = '';
+      if (cardFile) {
+        const fd = new FormData();
+        fd.append('file', cardFile);
+        const uploadRes = await uploadVisitingCard(fd);
+        cardMediaId = uploadRes.data?.id || '';
+      }
       const res = await registerFromScan(qrCode, {
         customer_name: name.trim(),
         customer_phone: phone.trim(),
+        customer_card_media_id: cardMediaId,
         device_info: navigator.userAgent,
       });
       startSession(res.data.session, res.data.business);
@@ -193,6 +204,49 @@ export default function ScanLandingPage() {
                         {qrInfo.default_route.distance_label || `${qrInfo.default_route.distance_value} ${qrInfo.default_route.distance_unit}`}
                         {' '} ~ {qrInfo.default_route.estimated_time_minutes} min
                       </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Visiting Card Upload — Yash-only, optional */}
+                {business?.slug === 'yash' && (
+                  <div>
+                    <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1.5 block">
+                      Visiting Card <span className="text-[hsl(var(--muted-foreground))]">(optional)</span>
+                    </label>
+                    {cardPreview ? (
+                      <div className="relative rounded-lg overflow-hidden border border-[hsl(var(--border))]">
+                        <img src={cardPreview} alt="Card preview" className="w-full h-24 object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => { setCardFile(null); setCardPreview(null); }}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                          data-testid="card-remove-button"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        className="flex items-center justify-center gap-2 h-12 rounded-lg border border-dashed border-[hsl(var(--border))] cursor-pointer hover:bg-[hsl(var(--muted))] transition-colors"
+                        data-testid="card-upload-label"
+                      >
+                        <CreditCard className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">Tap to upload visiting card</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setCardFile(f);
+                              setCardPreview(URL.createObjectURL(f));
+                            }
+                          }}
+                          data-testid="card-upload-input"
+                        />
+                      </label>
                     )}
                   </div>
                 )}

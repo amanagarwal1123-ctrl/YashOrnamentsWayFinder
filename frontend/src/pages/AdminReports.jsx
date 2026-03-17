@@ -46,17 +46,22 @@ export default function AdminReports() {
     } catch (e) {}
   };
 
+  // Helper: strip sentinel "all_*" values so they are never sent to the backend
+  const cleanFilters = () => {
+    const params = {};
+    if (statusFilter && !statusFilter.startsWith('all_')) params.status = statusFilter;
+    if (routeFilter && !routeFilter.startsWith('all_')) params.route_id = routeFilter;
+    if (businessFilter && !businessFilter.startsWith('all_')) params.business_id = businessFilter;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    if (assignedFilter && !assignedFilter.startsWith('all_')) params.assigned_to = assignedFilter;
+    return params;
+  };
+
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (statusFilter) params.status = statusFilter;
-      if (routeFilter) params.route_id = routeFilter;
-      if (businessFilter) params.business_id = businessFilter;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (assignedFilter) params.assigned_to = assignedFilter;
-      const res = await adminGetReportSessions(params);
+      const res = await adminGetReportSessions(cleanFilters());
       setSessions(res.data);
     } catch (e) { toast.error('Failed to load sessions'); }
     setLoading(false);
@@ -65,13 +70,7 @@ export default function AdminReports() {
   const handleExport = async (format) => {
     setExporting(true);
     try {
-      const params = {};
-      if (statusFilter) params.status = statusFilter;
-      if (routeFilter) params.route_id = routeFilter;
-      if (businessFilter) params.business_id = businessFilter;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      const res = await adminExportReport(format, params);
+      const res = await adminExportReport(format, cleanFilters());
       const blob = new Blob([res.data], {
         type: format === 'xlsx'
           ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

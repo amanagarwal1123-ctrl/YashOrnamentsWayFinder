@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Navigation, Clock, MapPin, Video, Map, Phone, MessageCircle, Shield, Loader2, ChevronRight, Locate, LocateOff, PlayCircle, ArrowRight, Download, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { cacheRouteOffline, isServiceWorkerActive } from '@/lib/offline';
+import { cacheRouteOffline, ensureServiceWorkerReady } from '@/lib/offline';
 
 export default function NavigationHub() {
   const navigate = useNavigate();
@@ -23,10 +23,12 @@ export default function NavigationHub() {
   const [locationState, setLocationState] = useState(session?.location_permission_state || 'unknown');
   const [offlineSaved, setOfflineSaved] = useState(false);
   const [savingOffline, setSavingOffline] = useState(false);
+  const [swReady, setSwReady] = useState(false);
 
   useEffect(() => {
     if (!session) { navigate('/'); return; }
     loadRoutes();
+    ensureServiceWorkerReady().then(setSwReady);
   }, [session, navigate]);
 
   const loadRoutes = async () => {
@@ -196,7 +198,7 @@ export default function NavigationHub() {
                 )}
 
                 {/* Offline Save */}
-                {isServiceWorkerActive() && selectedRoute.offline_pack_enabled !== false && (
+                {swReady && selectedRoute.offline_pack_enabled !== false && (
                   <button
                     onClick={async () => {
                       setSavingOffline(true);

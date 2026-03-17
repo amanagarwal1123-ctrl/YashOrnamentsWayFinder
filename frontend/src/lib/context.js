@@ -2,43 +2,53 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 
 const AppContext = createContext(null);
 
-export function AppProvider({ children }) {
-  const [session, setSession] = useState(null);
-  const [business, setBusiness] = useState(null);
-  const [user, setUser] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+// Synchronous restore — runs before first render so child guards never see stale false
+function restoreAuth() {
+  try {
+    const savedUser = localStorage.getItem('nav_user');
+    const savedToken = localStorage.getItem('nav_token');
+    if (savedUser && savedToken) {
+      return { user: JSON.parse(savedUser), isLoggedIn: true };
+    }
+  } catch {
+    localStorage.removeItem('nav_user');
+    localStorage.removeItem('nav_token');
+  }
+  return { user: null, isLoggedIn: false };
+}
 
-  // Set document title
+function restoreSession() {
+  try {
+    const savedSession = sessionStorage.getItem('nav_session');
+    const savedBusiness = sessionStorage.getItem('nav_business');
+    if (savedSession && savedBusiness) {
+      return { session: JSON.parse(savedSession), business: JSON.parse(savedBusiness) };
+    }
+  } catch {
+    sessionStorage.removeItem('nav_session');
+    sessionStorage.removeItem('nav_business');
+  }
+  return { session: null, business: null };
+}
+
+const _auth = restoreAuth();
+const _sess = restoreSession();
+
+export function AppProvider({ children }) {
+  const [session, setSession] = useState(_sess.session);
+  const [business, setBusiness] = useState(_sess.business);
+  const [user, setUser] = useState(_auth.user);
+  const [isLoggedIn, setIsLoggedIn] = useState(_auth.isLoggedIn);
+
   useEffect(() => {
     document.title = 'Yash Ornaments WayFinder';
   }, []);
 
-  // Set business theme on html element
   useEffect(() => {
     if (business?.slug) {
       document.documentElement.setAttribute('data-business', business.slug);
     }
   }, [business]);
-
-  // Restore auth from localStorage — verify token still valid
-  useEffect(() => {
-    const savedUser = localStorage.getItem('nav_user');
-    const savedToken = localStorage.getItem('nav_token');
-    if (savedUser && savedToken) {
-      try {
-        const u = JSON.parse(savedUser);
-        setUser(u);
-        setIsLoggedIn(true);
-      } catch (e) {
-        localStorage.removeItem('nav_user');
-        localStorage.removeItem('nav_token');
-      }
-    } else {
-      // If either is missing, clear both
-      localStorage.removeItem('nav_user');
-      localStorage.removeItem('nav_token');
-    }
-  }, []);
 
   const loginUser = useCallback((userData) => {
     setUser(userData);
@@ -56,24 +66,8 @@ export function AppProvider({ children }) {
   const startSession = useCallback((sessionData, businessData) => {
     setSession(sessionData);
     setBusiness(businessData);
-    // Store in sessionStorage for persistence
     sessionStorage.setItem('nav_session', JSON.stringify(sessionData));
     sessionStorage.setItem('nav_business', JSON.stringify(businessData));
-  }, []);
-
-  // Restore session
-  useEffect(() => {
-    const savedSession = sessionStorage.getItem('nav_session');
-    const savedBusiness = sessionStorage.getItem('nav_business');
-    if (savedSession && savedBusiness) {
-      try {
-        setSession(JSON.parse(savedSession));
-        setBusiness(JSON.parse(savedBusiness));
-      } catch (e) {
-        sessionStorage.removeItem('nav_session');
-        sessionStorage.removeItem('nav_business');
-      }
-    }
   }, []);
 
   const updateSession = useCallback((updates) => {

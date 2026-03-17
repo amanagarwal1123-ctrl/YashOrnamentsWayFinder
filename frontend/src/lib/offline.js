@@ -1,15 +1,40 @@
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
+/**
+ * Register the service worker.
+ * Uses navigator.serviceWorker.ready to guarantee the SW is active
+ * before resolving, so callers can safely postMessage immediately after.
+ */
 export function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    });
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+
+  return navigator.serviceWorker
+    .register('/sw.js')
+    .then(() => navigator.serviceWorker.ready)
+    .catch(() => null);
+}
+
+/**
+ * Returns true once the SW has finished activating.
+ * Unlike the old check, this waits for .ready instead of testing .controller
+ * which is null on the very first page-load before a hard refresh.
+ */
+export async function ensureServiceWorkerReady() {
+  if (!('serviceWorker' in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return !!reg.active;
+  } catch {
+    return false;
   }
 }
 
 export async function cacheRouteOffline(routeId, checkpoints) {
-  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return false;
+  if (!('serviceWorker' in navigator)) return false;
+
+  const reg = await navigator.serviceWorker.ready;
+  const sw = reg.active;
+  if (!sw) return false;
 
   const urls = [
     `${BACKEND_URL}/api/routes/${routeId}`,
@@ -17,7 +42,7 @@ export async function cacheRouteOffline(routeId, checkpoints) {
     `${BACKEND_URL}/api/map/schematic`,
   ];
 
-  // Add checkpoint images (skip video if too large)
+  // Add checkpoint images (skip video — too large for offline)
   checkpoints.forEach((cp) => {
     if (cp.photo_url) urls.push(cp.photo_url);
     if (cp.arrow_map_url) urls.push(cp.arrow_map_url);
@@ -32,12 +57,7 @@ export async function cacheRouteOffline(routeId, checkpoints) {
       }
     };
     navigator.serviceWorker.addEventListener('message', handler);
-    navigator.serviceWorker.controller.postMessage({ type: 'CACHE_ROUTE', routeId, urls });
-    // Timeout after 30s
-    setTimeout(() => { resolve(false); }, 30000);
+    sw.postMessage({ type: 'CACHE_ROUTE', routeId, urls });
+    setTimeout(() => resolve(false), 30000);
   });
-}
-
-export function isServiceWorkerActive() {
-  return 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 }
