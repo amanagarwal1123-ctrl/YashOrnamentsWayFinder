@@ -23,6 +23,7 @@ export default function CheckpointNavPage() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [locationActive, setLocationActive] = useState(false);
   const watchIdRef = useRef(null);
 
   useEffect(() => {
@@ -36,14 +37,15 @@ export default function CheckpointNavPage() {
       }
     }).catch(() => setLoading(false));
 
-    // Start location tracking if consent granted
-    if (session.location_consent_granted && navigator.geolocation) {
+    // Auto-request location tracking
+    if (navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (pos) => {
+          setLocationActive(true);
           try { await updateLocation(session.id, pos.coords.latitude, pos.coords.longitude); } catch (e) { /* silent */ }
         },
-        () => {},
-        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+        () => { setLocationActive(false); },
+        { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
       );
     }
     return () => {
@@ -166,9 +168,17 @@ export default function CheckpointNavPage() {
             <button onClick={() => navigate('/hub')} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="nav-back-button">
               ← Back
             </button>
-            <span className="text-xs font-mono text-[hsl(var(--muted-foreground))]" data-testid="checkpoint-progress-label">
-              Step {currentIdx + 1} of {checkpoints.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                locationActive ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+              }`} data-testid="nav-location-indicator">
+                <Locate className="w-2.5 h-2.5" />
+                {locationActive ? 'GPS' : 'No GPS'}
+              </span>
+              <span className="text-xs font-mono text-[hsl(var(--muted-foreground))]" data-testid="checkpoint-progress-label">
+                Step {currentIdx + 1} of {checkpoints.length}
+              </span>
+            </div>
             <button onClick={() => navigate('/schematic')} className="text-sm text-[hsl(var(--brand))]" data-testid="nav-map-button">
               <Map className="w-4 h-4" />
             </button>

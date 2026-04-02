@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
 import { getRoutes, getRoute, getRouteCheckpoints, selectRoute, updateLocationConsent, updateLocation, serveMediaUrl, logAssistEvent } from '@/lib/api';
 import { BrandHeader, BottomActionBar } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Navigation, Clock, MapPin, Video, Map, Phone, MessageCircle, Shield, Loader2, ChevronRight, Locate, LocateOff, PlayCircle, ArrowRight, Download, WifiOff } from 'lucide-react';
+import { Navigation, Clock, MapPin, Map, Phone, MessageCircle, Loader2, ChevronRight, Locate, PlayCircle, ArrowRight, Download, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cacheRouteOffline, ensureServiceWorkerReady } from '@/lib/offline';
@@ -19,23 +17,52 @@ export default function NavigationHub() {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
-  const [showLocationConsent, setShowLocationConsent] = useState(false);
-  const [locationState, setLocationState] = useState(session?.location_permission_state || 'unknown');
   const [offlineSaved, setOfflineSaved] = useState(false);
   const [savingOffline, setSavingOffline] = useState(false);
   const [swReady, setSwReady] = useState(false);
+  const [locationActive, setLocationActive] = useState(false);
+  const watchRef = useRef(null);
 
   useEffect(() => {
     if (!session) { navigate('/'); return; }
     loadRoutes();
     ensureServiceWorkerReady().then(setSwReady);
+    // Auto-request location immediately
+    requestLocation();
+    return () => {
+      if (watchRef.current !== null) navigator.geolocation?.clearWatch(watchRef.current);
+    };
   }, [session, navigate]);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation || !session) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationActive(true);
+        updateLocationConsent(session.id, true).catch(() => {});
+        updateSession({ location_consent_granted: true, location_permission_state: 'granted' });
+        updateLocation(session.id, pos.coords.latitude, pos.coords.longitude).catch(() => {});
+        // Start continuous tracking
+        watchRef.current = navigator.geolocation.watchPosition(
+          (p) => {
+            updateLocation(session.id, p.coords.latitude, p.coords.longitude).catch(() => {});
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
+        );
+      },
+      () => {
+        // Permission denied or unavailable - continue without location
+        setLocationActive(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [session?.id, updateSession]);
 
   const loadRoutes = async () => {
     try {
       const res = await getRoutes();
       setRoutes(res.data);
-      // If session has a preselected route, load its details
       if (session?.route_id) {
         const routeRes = await getRoute(session.route_id);
         setSelectedRoute(routeRes.data);
@@ -62,50 +89,13 @@ export default function NavigationHub() {
         route_distance_unit: selectedRoute.distance_unit,
         started_at: new Date().toISOString(),
       });
-      // Show location consent if not yet asked
-      if (locationState === 'unknown') {
-        setShowLocationConsent(true);
-      } else {
-        navigate('/navigate');
-      }
+      navigate('/navigate');
     } catch (e) {
       toast.error('Failed to start navigation');
     } finally {
       setStarting(false);
     }
   };
-
-  const handleLocationConsent = async (granted) => {
-    try {
-      await updateLocationConsent(session.id, granted);
-      const newState = granted ? 'granted' : 'denied';
-      setLocationState(newState);
-      updateSession({ location_consent_granted: granted, location_permission_state: newState });
-      if (granted) {
-        startLocationTracking();
-        toast.success('Location sharing enabled');
-      } else {
-        toast.info('No worries! You can still navigate using checkpoint images.');
-      }
-    } catch (e) {
-      toast.error('Failed to update location consent');
-    }
-    setShowLocationConsent(false);
-    navigate('/navigate');
-  };
-
-  const startLocationTracking = useCallback(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.watchPosition(
-      async (pos) => {
-        try {
-          await updateLocation(session.id, pos.coords.latitude, pos.coords.longitude);
-        } catch (e) { /* silently fail */ }
-      },
-      () => { /* error: continue in manual mode */ },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-    );
-  }, [session?.id]);
 
   const difficultyColors = {
     easy: 'bg-green-100 text-green-700',
@@ -120,6 +110,16 @@ export default function NavigationHub() {
       <BrandHeader showBack title={business?.full_name || 'Navigation'} subtitle={business?.address} />
 
       <div className="max-w-[480px] mx-auto px-4 py-4">
+        {/* Location Status */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 text-xs font-medium ${
+          locationActive
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+        }`} data-testid="location-status">
+          <Locate className="w-3.5 h-3.5" />
+          {locationActive ? 'Location tracking active' : 'Location unavailable - using checkpoint mode'}
+        </div>
+
         {/* Selected Route Info */}
         {selectedRoute ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -317,47 +317,6 @@ export default function NavigationHub() {
           </Button>
         </BottomActionBar>
       )}
-
-      {/* Location Consent Dialog */}
-      <Dialog open={showLocationConsent} onOpenChange={setShowLocationConsent}>
-        <DialogContent className="max-w-[380px]" data-testid="location-consent-dialog">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Locate className="w-5 h-5 text-[hsl(var(--brand))]" />
-              Share Your Location?
-            </DialogTitle>
-            <DialogDescription>
-              Sharing your location helps our helpdesk team guide you better and track your progress on the route.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50">
-              <Shield className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-green-800">Your privacy matters</p>
-                <p className="text-xs text-green-700">Location is only used during your visit and not stored permanently.</p>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="flex gap-2 sm:gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => handleLocationConsent(false)}
-              data-testid="location-deny-button"
-            >
-              <LocateOff className="w-4 h-4 mr-2" /> No Thanks
-            </Button>
-            <Button
-              className="flex-1 bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))]"
-              onClick={() => handleLocationConsent(true)}
-              data-testid="location-allow-button"
-            >
-              <Locate className="w-4 h-4 mr-2" /> Allow
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -21,7 +21,6 @@ import AdminDashboard from '@/pages/AdminDashboard';
 import AdminRoutes from '@/pages/AdminRoutes';
 import AdminSessions from '@/pages/AdminSessions';
 import AdminUsers from '@/pages/AdminUsers';
-import AdminGoldRates from '@/pages/AdminGoldRates';
 import AdminAnalytics from '@/pages/AdminAnalytics';
 import AdminQRGeneration from '@/pages/AdminQRGeneration';
 import AdminBrandingSettings from '@/pages/AdminBrandingSettings';
@@ -29,8 +28,6 @@ import AdminMediaManagement from '@/pages/AdminMediaManagement';
 import AdminManualsPage from '@/pages/AdminManualsPage';
 import AdminReports from '@/pages/AdminReports';
 import HelpdeskDashboard from '@/pages/HelpdeskDashboard';
-import GoldRatePage from '@/pages/GoldRatePage';
-import GalleryPage from '@/pages/GalleryPage';
 import HelpGuidePage from '@/pages/HelpGuidePage';
 import HelpdeskManualPage from '@/pages/HelpdeskManualPage';
 import TrainerManualPage from '@/pages/TrainerManualPage';
@@ -54,8 +51,6 @@ function App() {
           <Route path="/where-am-i" element={<WhereAmIPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/arrived" element={<ArrivalPage />} />
-          <Route path="/gold-rates" element={<GoldRatePage />} />
-          <Route path="/gallery" element={<GalleryPage />} />
 
           {/* Public Help Guide */}
           <Route path="/help-guide" element={<HelpGuidePage />} />
@@ -73,7 +68,6 @@ function App() {
           <Route path="/admin/routes" element={<AdminRoutes />} />
           <Route path="/admin/sessions" element={<AdminSessions />} />
           <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/gold-rates" element={<AdminGoldRates />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
           <Route path="/admin/qr-codes" element={<AdminQRGeneration />} />
           <Route path="/admin/branding" element={<AdminBrandingSettings />} />
@@ -87,6 +81,8 @@ function App() {
           {/* Legacy redirects */}
           <Route path="/tutorial" element={<Navigate to="/help-guide" replace />} />
           <Route path="/admin/tutorial-pdf" element={<Navigate to="/admin/manuals" replace />} />
+          <Route path="/gold-rates" element={<Navigate to="/" replace />} />
+          <Route path="/gallery" element={<Navigate to="/" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

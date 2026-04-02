@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { createSession, getRoutes, getGoldRates } from '@/lib/api';
+import { createSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Navigation, Phone, MessageCircle, MapPin, Compass, HelpCircle, Gem, TrendingUp, Calculator, Shield, Wifi } from 'lucide-react';
+import { Navigation, Phone, MessageCircle, HelpCircle, Compass, Shield, Wifi } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -15,19 +15,12 @@ export default function LandingPage() {
   const { session, business, startSession } = useApp();
   const [qrInput, setQrInput] = useState(qrCode || '');
   const [loading, setLoading] = useState(false);
-  const [goldRate, setGoldRate] = useState(null);
 
   useEffect(() => {
     if (qrCode && !session) {
       handleStart(qrCode);
     }
   }, [qrCode]);
-
-  useEffect(() => {
-    if (business?.slug === 'ajpl') {
-      getGoldRates().then(r => setGoldRate(r.data)).catch(() => {});
-    }
-  }, [business]);
 
   const handleStart = async (code) => {
     if (!code) { toast.error('Please enter a QR code'); return; }
@@ -44,9 +37,7 @@ export default function LandingPage() {
     }
   };
 
-  const isAjpl = business?.slug === 'ajpl';
-
-  // Session active - show landing
+  // Session active - show navigation hub
   if (session && business) {
     return (
       <div className="min-h-screen bg-[hsl(var(--background))]">
@@ -58,9 +49,7 @@ export default function LandingPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <div className="flex items-center gap-2 mb-2">
                 <Shield className="w-4 h-4 text-[hsl(var(--gold))]" />
-                <span className="text-xs font-medium text-[hsl(var(--gold))]">
-                  {isAjpl ? 'Premium Retail' : 'Wholesale Partner'}
-                </span>
+                <span className="text-xs font-medium text-[hsl(var(--gold))]">WayFinder</span>
               </div>
               <h1 className="font-display text-3xl font-bold mb-1" data-testid="landing-business-name">
                 {business.full_name}
@@ -92,59 +81,15 @@ export default function LandingPage() {
                     <Compass className="w-4 h-4 mr-2" /> Where Am I?
                   </Button>
                   <Button variant="outline" className="h-11" onClick={() => navigate('/map')} data-testid="landing-treasure-map-button">
-                    <MapPin className="w-4 h-4 mr-2" /> View Map
+                    <Navigation className="w-4 h-4 mr-2" /> View Map
                   </Button>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
 
-          {/* AJPL-only modules */}
-          {isAjpl && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              {goldRate && goldRate.rate_24k > 0 && (
-                <Card className="mb-4 border-[hsl(var(--gold)/0.3)]">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-[hsl(var(--gold))]" /> Gold Rate</span>
-                      <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Last updated: {goldRate.updated_at ? new Date(goldRate.updated_at).toLocaleDateString() : 'N/A'}</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <div>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">24K</p>
-                        <p className="text-lg font-bold tabular-nums" data-testid="ajpl-gold-rate-value">₹{goldRate.rate_24k?.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">22K</p>
-                        <p className="text-lg font-bold tabular-nums">₹{goldRate.rate_22k?.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => navigate('/gold-rates')} data-testid="view-gold-rates-button">
-                      View Details
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/gallery')} data-testid="ajpl-gallery-button">
-                  <CardContent className="p-4 text-center">
-                    <Gem className="w-6 h-6 mx-auto mb-2 text-[hsl(var(--gold))]" />
-                    <p className="text-sm font-medium">Design Gallery</p>
-                  </CardContent>
-                </Card>
-                <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/gold-rates')} data-testid="ajpl-calculator-button">
-                  <CardContent className="p-4 text-center">
-                    <Calculator className="w-6 h-6 mx-auto mb-2 text-[hsl(var(--gold))]" />
-                    <p className="text-sm font-medium">Rate Calculator</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </motion.div>
-          )}
-
           {/* Support Actions */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card>
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold mb-3">Need Help?</h3>
