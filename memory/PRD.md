@@ -1,7 +1,7 @@
 # Yash Ornaments WayFinder - Product Requirements Document
 
 ## Original Problem Statement
-A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation guidance for customers visiting Yash Ornaments in Chandni Chowk, Delhi. Features include QR-based session management, checkpoint-by-checkpoint navigation, helpdesk support, admin analytics, and offline capabilities.
+A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation guidance for customers visiting Yash Ornaments in Chandni Chowk, Delhi. Pure wayfinding app — no catalogue, gallery, or gold rate features.
 
 ## Core Features Implemented
 
@@ -10,7 +10,7 @@ A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation gui
 
 ### Batch B: Customer Flow UI (Complete)
 - NavigationHub, ScanLandingPage, CheckpointNavPage, quick-action bar
-- Location consent, WhatsApp video handoff, recovery mode
+- Auto location tracking, WhatsApp video handoff, recovery mode
 
 ### Batch D: Helpdesk Dashboard (Complete)
 - Real-time queue with statuses, session detail, claim/unclaim, notes
@@ -19,24 +19,22 @@ A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation gui
 - KPIs, live monitoring, filtered reports, CSV/XLSX export
 
 ### Batch G: Offline Route Packs (Complete)
-- Service worker caching, route metadata/checkpoints/images
+- Service worker at /sw.js, route caching, offline navigation fallback
 
 ### UI/Content Cleanup (Complete - March 17, 2026)
-- **Removed** Staff Login from all public/customer pages
-- **Removed** old App Guide / Tutorial / User Manual CTAs
-- **Replaced** text-heavy mixed tutorial with screenshot-first role-specific guides
-- **New routes:**
-  - `/staff` - Dedicated staff login page
-  - `/login` - Backward-compatible redirect to `/staff`
-  - `/help-guide` - Public lightweight customer help guide (11 steps)
-  - `/manual/helpdesk` - Helpdesk-only manual (8 steps)
-  - `/manual/trainer` - Trainer-only manual (6 steps)
-  - `/admin/manuals` - Admin manual center with all guides via tabs
-  - `/tutorial` - Redirects to `/help-guide`
-  - `/admin/tutorial-pdf` - Redirects to `/admin/manuals`
-- **Reusable components:** ScreenshotGuide, EmbeddedGuide, guideData.js
-- **32 real screenshots** captured from the running app
-- **Role-aware sidebar:** Admin sees full nav, Trainer sees Routes/Media/Manual, Helpdesk sees Helpdesk/Manual
+- Screenshot-first role-specific guides at /help-guide, /manual/helpdesk, /manual/trainer, /admin/manuals
+- Staff login at /staff, /login redirects to /staff
+- Role-aware sidebar
+
+### Streamlining to Pure Wayfinder (Complete - April 2, 2026)
+- **Removed** gold rates, gallery, catalogue from all customer pages
+- **Removed** Gold Rates from admin sidebar
+- **Removed** AJPL-specific sections (gold rate display, design gallery, rate calculator)
+- **Auto location tracking**: Browser geolocation requested automatically, no consent dialog
+- **GPS status indicators** on Navigation Hub and Checkpoint Nav page
+- **QR Code generation** confirmed working at /admin/qr-codes
+- **PWA/Offline**: Service worker registered, route caching, Save for Offline button
+- Legacy routes /gold-rates and /gallery redirect to home
 
 ## Pending / Upcoming
 
@@ -56,35 +54,32 @@ A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation gui
 ```
 /app/
 ├── backend/
-│   ├── server.py (main API - needs refactoring)
+│   ├── server.py (main API)
 │   ├── models.py
 │   └── .env
 ├── frontend/
 │   ├── src/
 │   │   ├── App.js
 │   │   ├── components/
-│   │   │   ├── ScreenshotGuide.jsx (NEW)
-│   │   │   ├── shared.jsx (role-aware sidebar)
+│   │   │   ├── ScreenshotGuide.jsx
+│   │   │   ├── shared.jsx (role-aware sidebar, no gold rates)
 │   │   │   └── ui/ (shadcn)
 │   │   ├── data/
-│   │   │   └── guideData.js (NEW)
+│   │   │   └── guideData.js
 │   │   ├── pages/
-│   │   │   ├── HelpGuidePage.jsx (NEW)
-│   │   │   ├── HelpdeskManualPage.jsx (NEW)
-│   │   │   ├── TrainerManualPage.jsx (NEW)
-│   │   │   ├── AdminManualsPage.jsx (NEW)
-│   │   │   ├── LandingPage.jsx (modified)
+│   │   │   ├── LandingPage.jsx (pure wayfinder, no AJPL extras)
+│   │   │   ├── NavigationHub.jsx (auto-location, GPS status)
+│   │   │   ├── CheckpointNavPage.jsx (auto-location, GPS indicator)
+│   │   │   ├── AdminQRGeneration.jsx (QR code generation)
 │   │   │   └── ...
 │   │   └── lib/
 │   │       ├── api.js
 │   │       ├── context.js
-│   │       └── offline.js
+│   │       └── offline.js (SW registration, route caching)
 │   └── public/
-│       └── screenshots/ (NEW - 32 real app screenshots)
-│           ├── customer/ (11 screenshots)
-│           ├── helpdesk/ (8 screenshots)
-│           ├── trainer/ (6 screenshots)
-│           └── admin/ (7 screenshots)
+│       ├── sw.js (service worker)
+│       ├── manifest.json (PWA manifest)
+│       └── screenshots/ (guide screenshots)
 ```
 
 ## Test Credentials
@@ -92,9 +87,3 @@ A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation gui
 - Helpdesk: username `helpdesk1`, OTP `admin123`
 - Trainer: username `trainer1`, OTP `admin123`
 - Customer QR codes: `AJPL-DEFAULT`, `YASH-DEFAULT`
-
-## Tech Stack
-- **Backend:** FastAPI, MongoDB (Beanie ODM), Python
-- **Frontend:** React, Tailwind CSS, Shadcn UI, Framer Motion
-- **PWA:** Service Workers for offline caching
-- **LLM:** OpenAI GPT via Emergent LLM Key
