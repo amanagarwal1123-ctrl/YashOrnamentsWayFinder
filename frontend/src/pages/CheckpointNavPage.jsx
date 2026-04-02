@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowOverlayRenderer } from '@/components/ArrowOverlay';
 
 export default function CheckpointNavPage() {
   const navigate = useNavigate();
@@ -201,8 +202,9 @@ export default function CheckpointNavPage() {
               <CardContent className="p-0">
                 {/* Image */}
                 {cp.photo_url ? (
-                  <div className="aspect-video rounded-t-xl overflow-hidden bg-[hsl(var(--muted))]">
+                  <div className="aspect-video rounded-t-xl overflow-hidden bg-[hsl(var(--muted))] relative">
                     <img src={cp.photo_url} alt={cp.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                    <ArrowOverlayRenderer arrows={cp.direction_arrows || []} containerWidth={480} containerHeight={270} />
                   </div>
                 ) : (
                   <div className="checkpoint-placeholder aspect-video rounded-t-xl">

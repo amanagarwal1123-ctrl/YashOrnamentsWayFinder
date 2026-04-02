@@ -21,13 +21,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   Route as RouteIcon, Plus, MapPin, Clock, Trash2, Edit3, Image, Video,
   Compass, Upload, Save, GripVertical, Eye, Loader2, Camera,
-  MoreVertical, Copy, Download, UploadCloud, Archive, FileJson, Check, X,
+  MoreVertical, Copy, Download, UploadCloud, Archive, FileJson, Check, X, Navigation as NavIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ArrowPlacementEditor } from '@/components/ArrowOverlay';
 
 const DIRECTIONS = [
   { value: 'straight', label: 'Straight', icon: '\u2191' },
@@ -51,6 +52,7 @@ const emptyCheckpoint = {
   name: '', short_instruction: '', long_instruction: '', landmark_description: '',
   what_to_look_for: '', direction: 'straight', indoor: false, floor_context: '',
   is_critical: true, risk_level: 'low', fallback_text: '', heading: 0, lat: 0, lng: 0,
+  direction_arrows: [],
 };
 
 /* ───────── Sortable Checkpoint Row ───────── */
@@ -575,8 +577,19 @@ export default function AdminRoutes() {
 
             {/* TAB: Arrow Map */}
             <TabsContent value="arrow" className="space-y-4">
-              <div className="p-3 rounded-lg bg-muted text-xs text-muted-foreground">Upload a directional arrow map image.</div>
+              <div className="p-3 rounded-lg bg-muted text-xs text-muted-foreground">
+                Upload a directional arrow map, or place direction arrows on the checkpoint photo.
+              </div>
               <MediaField label="Arrow Map Image" value={cpForm.arrow_map_url} fieldKey="arrow_map_url" accept="image/*" mediaType="arrow_map" uploading={uploading} onUpload={handleMediaUpload} onClear={() => setCpForm({ ...cpForm, arrow_map_url: '' })} isImage />
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-semibold mb-2 flex items-center gap-1.5"><NavIcon className="w-3.5 h-3.5" /> Direction Arrows on Photo</h4>
+                <p className="text-[11px] text-muted-foreground mb-3">Select an arrow type, then click on the checkpoint photo to place arrows. Click a placed arrow to remove it.</p>
+                <ArrowPlacementEditor
+                  imageUrl={cpForm.photo_url}
+                  arrows={cpForm.direction_arrows || []}
+                  onChange={(arrows) => setCpForm({ ...cpForm, direction_arrows: arrows })}
+                />
+              </div>
             </TabsContent>
 
             {/* TAB: AR / Compass */}

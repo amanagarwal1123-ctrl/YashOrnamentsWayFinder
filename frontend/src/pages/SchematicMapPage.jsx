@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getSchematicMap, getRoutes } from '@/lib/api';
-import { BrandHeader, BrandingFooter } from '@/components/shared';
+import { getSchematicMap, getRoutes, getCheckpoint } from '@/lib/api';
+import { BrandHeader, BrandingFooter, DirectionIcon } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, Navigation, Check, List, Map as MapIcon, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MapPin, Navigation, Check, List, Map as MapIcon, Loader2, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { ArrowOverlayRenderer } from '@/components/ArrowOverlay';
 
 const START_TYPE_ICONS = { metro: 'M', red_fort: 'R', omaxe: 'O', gurudwara: 'G', town_hall: 'T' };
 
@@ -19,6 +21,8 @@ export default function SchematicMapPage() {
   const [selectedRouteId, setSelectedRouteId] = useState('');
   const [viewMode, setViewMode] = useState('map');
   const [loading, setLoading] = useState(true);
+  const [selectedCp, setSelectedCp] = useState(null);
+  const [cpLoading, setCpLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -26,7 +30,6 @@ export default function SchematicMapPage() {
         const [mapRes, routesRes] = await Promise.all([getSchematicMap(), getRoutes()]);
         setMapData(mapRes.data);
         setRoutes(routesRes.data);
-        // Default to session route or first
         const sessionRoute = session?.route_id;
         if (sessionRoute && mapRes.data.route_paths?.some(rp => rp.route_id === sessionRoute)) {
           setSelectedRouteId(sessionRoute);
@@ -49,7 +52,6 @@ export default function SchematicMapPage() {
 
   const selectedRoute = useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
 
-  // Compute completed nodes based on currentOrder
   const completedNodeIds = useMemo(() => {
     if (!mapData || !selectedPath || !currentOrder) return new Set();
     const ids = new Set();
@@ -68,6 +70,18 @@ export default function SchematicMapPage() {
     return n?.id || '';
   }, [mapData, currentCheckpointId]);
 
+  const handleNodeClick = async (node) => {
+    if (!node.checkpoint_id) return;
+    setCpLoading(true);
+    try {
+      const res = await getCheckpoint(node.checkpoint_id);
+      setSelectedCp(res.data);
+    } catch {
+      setSelectedCp({ name: node.label, short_instruction: 'Details unavailable' });
+    }
+    setCpLoading(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -81,7 +95,6 @@ export default function SchematicMapPage() {
       <BrandHeader showBack title="Route Map" subtitle="All routes to Yash Complex" />
 
       <div className="max-w-[640px] mx-auto px-4 py-4">
-        {/* Route Selector + View Toggle */}
         <div className="flex items-center gap-2 mb-4">
           <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
             <SelectTrigger className="flex-1 h-10" data-testid="map-route-selector"><SelectValue placeholder="Select route" /></SelectTrigger>
@@ -100,13 +113,14 @@ export default function SchematicMapPage() {
           </div>
         </div>
 
+        <p className="text-xs text-muted-foreground mb-2">Tap any checkpoint to view photos and directions</p>
+
         {viewMode === 'map' ? (
-          <SchematicSVG mapData={mapData} selectedPath={selectedPath} completedNodeIds={completedNodeIds} currentNodeId={currentNodeId} />
+          <SchematicSVG mapData={mapData} selectedPath={selectedPath} completedNodeIds={completedNodeIds} currentNodeId={currentNodeId} onNodeClick={handleNodeClick} />
         ) : (
-          <ListFallback mapData={mapData} selectedPath={selectedPath} selectedRoute={selectedRoute} completedNodeIds={completedNodeIds} currentNodeId={currentNodeId} />
+          <ListFallback mapData={mapData} selectedPath={selectedPath} selectedRoute={selectedRoute} completedNodeIds={completedNodeIds} currentNodeId={currentNodeId} onNodeClick={handleNodeClick} />
         )}
 
-        {/* Legend */}
         <Card className="mt-4">
           <CardContent className="p-3">
             <p className="text-xs font-semibold mb-2">Routes</p>
@@ -133,17 +147,62 @@ export default function SchematicMapPage() {
 
         <BrandingFooter className="mt-6" />
       </div>
+
+      {/* Checkpoint Detail Dialog */}
+      <Dialog open={!!selectedCp} onOpenChange={(open) => { if (!open) setSelectedCp(null); }}>
+        <DialogContent className="max-w-[420px] p-0 overflow-hidden" data-testid="checkpoint-detail-dialog">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="flex items-center gap-3 text-base">
+              {selectedCp?.direction && <DirectionIcon direction={selectedCp.direction} size={36} />}
+              <div>
+                <p className="font-semibold">{selectedCp?.name}</p>
+                {selectedCp?.floor_context && <p className="text-xs text-muted-foreground">{selectedCp.floor_context}</p>}
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          {cpLoading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : selectedCp && (
+            <div>
+              {/* Checkpoint photo with arrow overlay */}
+              {selectedCp.photo_url && (
+                <div className="relative">
+                  <img src={selectedCp.photo_url} alt={selectedCp.name} className="w-full h-auto" />
+                  <ArrowOverlayRenderer arrows={selectedCp.direction_arrows || []} containerWidth={420} containerHeight={280} />
+                </div>
+              )}
+              {/* Arrow map if available */}
+              {selectedCp.arrow_map_url && !selectedCp.photo_url && (
+                <img src={selectedCp.arrow_map_url} alt="Direction" className="w-full h-auto" />
+              )}
+              <div className="px-4 py-3 space-y-2">
+                {selectedCp.short_instruction && (
+                  <p className="text-sm font-medium">{selectedCp.short_instruction}</p>
+                )}
+                {selectedCp.long_instruction && selectedCp.long_instruction !== selectedCp.short_instruction && (
+                  <p className="text-xs text-muted-foreground">{selectedCp.long_instruction}</p>
+                )}
+                {selectedCp.what_to_look_for && (
+                  <p className="text-xs"><span className="font-medium">Look for:</span> {selectedCp.what_to_look_for}</p>
+                )}
+                {selectedCp.risk_level === 'high' && (
+                  <div className="px-2 py-1 rounded bg-red-50 border border-red-200 text-xs text-red-700 font-medium">Confusion point - Pay close attention</div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 /* ───── SVG Schematic Map ───── */
-function SchematicSVG({ mapData, selectedPath, completedNodeIds, currentNodeId }) {
+function SchematicSVG({ mapData, selectedPath, completedNodeIds, currentNodeId, onNodeClick }) {
   if (!mapData) return null;
-  const { nodes, edges, route_paths } = mapData;
+  const { nodes, route_paths } = mapData;
   const nodeLookup = Object.fromEntries(nodes.map(n => [n.id, n]));
 
-  // Viewbox - find bounds
   const xs = nodes.map(n => n.x);
   const ys = nodes.map(n => n.y);
   const pad = 60;
@@ -157,7 +216,7 @@ function SchematicSVG({ mapData, selectedPath, completedNodeIds, currentNodeId }
   return (
     <div className="rounded-xl border bg-card overflow-hidden" data-testid="schematic-map">
       <svg viewBox={`${minX} ${minY} ${vw} ${vh}`} className="w-full" style={{ minHeight: 300 }}>
-        {/* All route edges (dimmed) */}
+        {/* Dimmed routes */}
         {route_paths.filter(rp => rp.route_id !== selectedPath?.route_id).map(rp =>
           rp.node_ids.map((nid, i) => {
             if (i === 0) return null;
@@ -209,12 +268,14 @@ function SchematicSVG({ mapData, selectedPath, completedNodeIds, currentNodeId }
           );
         })}
 
-        {/* Checkpoint nodes on selected route */}
+        {/* Clickable checkpoint nodes */}
         {selectedPath && nodes.filter(n => n.type === 'checkpoint' && n.route_id === selectedPath.route_id).map(n => {
           const isCompleted = completedNodeIds.has(n.id);
           const isCurrent = n.id === currentNodeId;
           return (
-            <g key={n.id}>
+            <g key={n.id} className="cursor-pointer" onClick={() => onNodeClick(n)} data-testid={`map-checkpoint-${n.id}`}>
+              {/* Larger invisible hit area */}
+              <circle cx={n.x} cy={n.y} r={16} fill="transparent" />
               {isCurrent && <circle cx={n.x} cy={n.y} r={12} fill={selectedPath.color} opacity={0.2}>
                 <animate attributeName="r" from="10" to="16" dur="1.5s" repeatCount="indefinite" />
                 <animate attributeName="opacity" from="0.3" to="0" dur="1.5s" repeatCount="indefinite" />
@@ -230,8 +291,8 @@ function SchematicSVG({ mapData, selectedPath, completedNodeIds, currentNodeId }
   );
 }
 
-/* ───── List View Fallback ───── */
-function ListFallback({ mapData, selectedPath, selectedRoute, completedNodeIds, currentNodeId }) {
+/* ───── List View ───── */
+function ListFallback({ mapData, selectedPath, selectedRoute, completedNodeIds, currentNodeId, onNodeClick }) {
   if (!mapData || !selectedPath) return <p className="text-sm text-muted-foreground text-center py-8">Select a route to see checkpoints</p>;
   const nodeLookup = Object.fromEntries(mapData.nodes.map(n => [n.id, n]));
 
@@ -250,8 +311,14 @@ function ListFallback({ mapData, selectedPath, selectedRoute, completedNodeIds, 
             const isCompleted = completedNodeIds.has(nid);
             const isCurrent = nid === currentNodeId;
             const isLast = i === selectedPath.node_ids.length - 1;
+            const isClickable = node.type === 'checkpoint';
             return (
-              <div key={nid} className="flex items-start gap-3" data-testid="list-checkpoint-item">
+              <div
+                key={nid}
+                className={`flex items-start gap-3 ${isClickable ? 'cursor-pointer hover:bg-muted/50 -mx-2 px-2 py-1 rounded-lg transition-colors' : ''}`}
+                onClick={() => isClickable && onNodeClick(node)}
+                data-testid="list-checkpoint-item"
+              >
                 <div className="flex flex-col items-center">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
                     isCompleted ? 'bg-primary border-primary text-primary-foreground' :
@@ -267,6 +334,7 @@ function ListFallback({ mapData, selectedPath, selectedRoute, completedNodeIds, 
                   <p className={`text-sm ${node.type === 'destination' ? 'font-bold' : ''}`}>{node.label}</p>
                   {node.type === 'origin' && <p className="text-xs text-muted-foreground">Start point</p>}
                   {node.type === 'destination' && <p className="text-xs text-muted-foreground">Final destination</p>}
+                  {isClickable && <p className="text-[10px] text-primary">Tap to view photo</p>}
                   {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">You are here</span>}
                 </div>
               </div>

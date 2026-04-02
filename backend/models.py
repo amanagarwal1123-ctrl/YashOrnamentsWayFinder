@@ -88,6 +88,7 @@ class Checkpoint(BaseModel):
     heading: float = 0.0  # compass heading for AR
     lat: float = 0.0
     lng: float = 0.0
+    direction_arrows: List[Dict[str, Any]] = []  # [{x, y, type, rotation}] overlay arrows on photo
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
