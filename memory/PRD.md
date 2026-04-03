@@ -1,36 +1,32 @@
 # Yash Ornaments WayFinder - Product Requirements Document
 
 ## Original Problem Statement
-A full-stack PWA (FastAPI, React, MongoDB) providing step-by-step navigation guidance for customers visiting Yash Ornaments in Chandni Chowk, Delhi. Pure wayfinding app.
+Pure wayfinding PWA for customers visiting Yash Ornaments in Chandni Chowk, Delhi. Step-by-step checkpoint navigation with GPS tracking, helpdesk support, and offline capabilities.
 
 ## Core Features Implemented
+- QR-based session creation → route selection → checkpoint navigation
+- Clickable checkpoints on schematic map with detail dialogs
+- Admin arrow placement on checkpoint images (6 arrow types)
+- Auto GPS tracking, location status indicators
+- Simplified quick actions: Call (+919958113991), WhatsApp, Where Am I
+- Browse Designs → yashornaments.in
+- Service worker offline caching
+- Admin dashboard, helpdesk, reports, QR generation
+- Screenshot-first role-specific manuals
 
-### Batch A: Foundational Backend APIs (Complete)
-### Batch B: Customer Flow UI (Complete)
-### Batch D: Helpdesk Dashboard (Complete)
-### Batch E: Admin Dashboard & Reports (Complete)
-### Batch G: Offline Route Packs (Complete)
-### UI/Content Cleanup (Complete - March 17, 2026)
-### Streamlining to Pure Wayfinder (Complete - April 2, 2026)
+## Recent Changes (April 2-3, 2026)
+- Fixed grey "Next Step" button bug
+- Added Browse Designs button → yashornaments.in
+- Simplified WhereAmI to GPS-based nearest checkpoints
+- Removed: "Can't find this", "Need Help", "More" sheet, Recovery page, Help page
+- Hub always shows all routes (no pre-selected)
+- Hardcoded contact: +919958113991
 
-### Clickable Checkpoints & Arrow Overlay (Complete - April 2, 2026)
-- **Schematic Map**: All checkpoint nodes are clickable — opens detail dialog showing photo, direction icon, instructions, arrow overlays, risk warnings
-- **List View**: Checkpoints also clickable with "Tap to view photo" hint
-- **Admin Arrow Placement**: New ArrowPlacementEditor in checkpoint editor "Arrow Map" tab
-  - 6 arrow types: Straight, Turn Left, Turn Right, Straight+Left, Straight+Right, Way Sign
-  - Click on checkpoint photo to place arrows at precise positions
-  - Click placed arrow to remove
-  - Arrows stored as `direction_arrows` field: `[{x, y, type, rotation}]`
-- **Customer View**: Arrow overlays rendered on checkpoint images during navigation via ArrowOverlayRenderer
+## Pending
+- P0: Batch C - Checkpoint Recovery / No-Location Fallback
+- P1: CMS Polish
+- P2: Refactor server.py
 
-## Pending / Upcoming
-
-### P0: Batch C - Checkpoint Recovery / No-Location Fallback UI
-### P1: Batch F - Remaining CMS Polish
-### P2: Refactor server.py Monolith
-
-## Test Credentials
-- Admin: username `admin`, OTP `admin123`
-- Helpdesk: username `helpdesk1`, OTP `admin123`
-- Trainer: username `trainer1`, OTP `admin123`
-- Customer QR codes: `AJPL-DEFAULT`, `YASH-DEFAULT`
+## Credentials
+- Admin: admin / admin123
+- QR codes: AJPL-DEFAULT, YASH-DEFAULT
