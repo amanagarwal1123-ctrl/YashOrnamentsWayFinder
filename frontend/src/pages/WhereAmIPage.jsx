@@ -1,145 +1,175 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { whereAmI, addSessionEvent } from '@/lib/api';
-import { BrandHeader, BottomActionBar } from '@/components/shared';
+import { getRoutes, getRouteCheckpoints } from '@/lib/api';
+import { BrandHeader } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Compass, MapPin, Search, Navigation, ArrowRight } from 'lucide-react';
-import { toast } from 'sonner';
+import { Locate, MapPin, Navigation, Loader2, Clock, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const QUICK_HINTS = [
-  'Narrow lane', 'Many silver shops', 'Omaxe side', 'Red Fort side',
-  'Town Hall side', 'Building with jewellery boards', 'Stairs visible',
-  'Lift visible', 'Market gate visible', 'Near metro gate',
-  'Inside building entrance', 'Book market area'
-];
+function getDistanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDist(km) {
+  if (km < 1) return `${Math.round(km * 1000)}m`;
+  return `${km.toFixed(1)}km`;
+}
 
 export default function WhereAmIPage() {
   const navigate = useNavigate();
-  const { session, business } = useApp();
-  const [description, setDescription] = useState('');
-  const [selectedHints, setSelectedHints] = useState([]);
-  const [matches, setMatches] = useState([]);
+  const { session } = useApp();
+  const [userPos, setUserPos] = useState(null);
+  const [locating, setLocating] = useState(true);
+  const [locError, setLocError] = useState('');
+  const [nearbyCheckpoints, setNearbyCheckpoints] = useState([]);
+  const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
 
-  const toggleHint = (hint) => {
-    setSelectedHints(prev => prev.includes(hint) ? prev.filter(h => h !== hint) : [...prev, hint]);
-  };
-
-  const handleSearch = async () => {
-    if (!description && selectedHints.length === 0) {
-      toast.error('Please describe what you see or select options');
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocError('Location not available on this device');
+      setLocating(false);
       return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+      },
+      () => {
+        setLocError('Could not get your location. Please allow location access.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!userPos) return;
+    loadNearby();
+  }, [userPos]);
+
+  const loadNearby = async () => {
     setLoading(true);
     try {
-      const res = await whereAmI({
-        description,
-        hints: selectedHints,
-        session_id: session?.id || '',
-        lat: 0, lng: 0
-      });
-      setMatches(res.data.matches || []);
-      setSearched(true);
-      if (session) {
-        await addSessionEvent(session.id, 'where_am_i', { description, hints: selectedHints });
+      const routesRes = await getRoutes();
+      setRoutes(routesRes.data);
+
+      const allCps = [];
+      for (const route of routesRes.data) {
+        try {
+          const cpRes = await getRouteCheckpoints(route.id);
+          cpRes.data.forEach(cp => {
+            if (cp.lat && cp.lng) {
+              const dist = getDistanceKm(userPos.lat, userPos.lng, cp.lat, cp.lng);
+              allCps.push({ ...cp, routeName: route.name, routeId: route.id, distance: dist });
+            }
+          });
+        } catch {}
       }
-    } catch (e) {
-      toast.error('Search failed');
-    } finally {
-      setLoading(false);
-    }
+
+      allCps.sort((a, b) => a.distance - b.distance);
+      setNearbyCheckpoints(allCps.slice(0, 15));
+    } catch {}
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] pb-24">
-      <BrandHeader showBack title="Where Am I?" subtitle="Let us find your location" />
-      
-      <div className="max-w-[480px] mx-auto px-4 py-4">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="mb-4">
-            <CardContent className="p-4">
-              <h3 className="font-semibold text-sm mb-2">Describe what you see</h3>
-              <Input
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="e.g., near a paan shop with silver shops around"
-                className="mb-3"
-                data-testid="where-am-i-input"
-              />
-              
-              <h3 className="font-semibold text-sm mb-2">Quick options</h3>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {QUICK_HINTS.map(hint => (
-                  <button
-                    key={hint}
-                    onClick={() => toggleHint(hint)}
-                    className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
-                      selectedHints.includes(hint)
-                        ? 'bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))] border-[hsl(var(--brand))]'
-                        : 'border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]'
-                    }`}
-                    data-testid={`hint-${hint.toLowerCase().replace(/\s/g, '-')}`}
-                  >
-                    {hint}
-                  </button>
-                ))}
-              </div>
-              
-              <Button className="w-full h-11" onClick={handleSearch} disabled={loading} data-testid="where-am-i-search">
-                <Search className="w-4 h-4 mr-2" /> {loading ? 'Searching...' : 'Find My Location'}
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
+    <div className="min-h-screen bg-[hsl(var(--background))]">
+      <BrandHeader showBack title="Where Am I?" subtitle="Nearest checkpoints to you" />
 
-        {/* Results */}
-        {searched && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            {matches.length > 0 ? (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">You might be near:</h3>
-                {matches.map((m, idx) => (
-                  <Card key={m.id} className="cursor-pointer hover:shadow-md transition-shadow" data-testid="where-am-i-result">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[hsl(var(--brand)/0.15)] flex items-center justify-center">
-                        <MapPin className="w-5 h-5 text-[hsl(var(--brand))]" />
+      <div className="max-w-[480px] mx-auto px-4 py-4">
+        {/* Location status */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-4 text-xs font-medium ${
+          userPos ? 'bg-green-50 text-green-700 border border-green-200' :
+          locError ? 'bg-red-50 text-red-700 border border-red-200' :
+          'bg-yellow-50 text-yellow-700 border border-yellow-200'
+        }`} data-testid="where-am-i-status">
+          <Locate className="w-3.5 h-3.5" />
+          {locating ? 'Getting your location...' : locError ? locError : 'Location found'}
+        </div>
+
+        {locating && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--muted-foreground))]" />
+          </div>
+        )}
+
+        {loading && !locating && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-[hsl(var(--muted-foreground))]" />
+            <span className="ml-2 text-sm text-[hsl(var(--muted-foreground))]">Finding nearby checkpoints...</span>
+          </div>
+        )}
+
+        {!locating && !loading && nearbyCheckpoints.length > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mb-3">
+              {nearbyCheckpoints.length} checkpoint{nearbyCheckpoints.length !== 1 ? 's' : ''} found near you
+            </p>
+            <div className="space-y-2">
+              {nearbyCheckpoints.map((cp, i) => (
+                <Card key={`${cp.routeId}-${cp.id}`} className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => {
+                    if (session?.route_id === cp.routeId) {
+                      navigate('/navigate');
+                    } else {
+                      navigate('/hub');
+                    }
+                  }}
+                  data-testid={`nearby-cp-${i}`}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[hsl(var(--brand)/0.1)] flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-4 h-4 text-[hsl(var(--brand))]" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{m.name}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.short_instruction}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{cp.name}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{cp.routeName}</p>
+                        {cp.short_instruction && (
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 truncate">{cp.short_instruction}</p>
+                        )}
                       </div>
-                      <ArrowRight className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <Compass className="w-10 h-10 mx-auto mb-2 text-[hsl(var(--muted-foreground))]" />
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">We couldn't match your description. Try calling our helpdesk for assistance.</p>
-                </CardContent>
-              </Card>
-            )}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold text-[hsl(var(--brand))]">{formatDist(cp.distance)}</p>
+                        <p className="text-[10px] text-[hsl(var(--muted-foreground))]">away</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </motion.div>
         )}
-      </div>
 
-      <BottomActionBar>
-        <Button variant="outline" className="flex-1 h-11" onClick={() => navigate('/help')} data-testid="where-am-i-help">
-          Need Help?
-        </Button>
-        {session?.route_id && (
-          <Button className="flex-1 h-11" onClick={() => navigate('/navigate')} data-testid="where-am-i-navigate">
-            <Navigation className="w-4 h-4 mr-2" /> Resume Route
-          </Button>
+        {!locating && !loading && userPos && nearbyCheckpoints.length === 0 && (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <MapPin className="w-10 h-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))]" />
+              <p className="text-sm font-medium mb-1">No checkpoints with coordinates found</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Checkpoints need GPS coordinates set by the trainer.</p>
+            </CardContent>
+          </Card>
         )}
-      </BottomActionBar>
+
+        {!locating && locError && (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <Locate className="w-8 h-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))]" />
+              <p className="text-sm font-medium mb-2">Location Required</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">Enable location access to see nearby checkpoints.</p>
+              <Button onClick={() => window.location.reload()}>Retry</Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

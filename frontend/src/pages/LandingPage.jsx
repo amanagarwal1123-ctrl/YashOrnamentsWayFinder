@@ -94,18 +94,18 @@ export default function LandingPage() {
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold mb-3">Need Help?</h3>
                 <div className="flex flex-wrap gap-2">
-                  <a href={`tel:${business.contact_phone}`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="landing-call-button">
+                  <a href="tel:+919958113991" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="landing-call-button">
                     <Phone className="w-4 h-4" /> Call
                   </a>
-                  <a href={`https://wa.me/${business.contact_whatsapp?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="landing-whatsapp-button">
+                  <a href="https://wa.me/919958113991" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="landing-whatsapp-button">
                     <MessageCircle className="w-4 h-4 text-green-600" /> WhatsApp
                   </a>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/help')} data-testid="landing-help-button">
-                    <HelpCircle className="w-4 h-4 mr-1" /> Help Me
+                  <Button variant="outline" size="sm" onClick={() => navigate('/where-am-i')} data-testid="landing-where-am-i-button">
+                    <Compass className="w-4 h-4 mr-1" /> Where Am I?
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/help-guide')} data-testid="landing-help-guide-button">
-                    <HelpCircle className="w-4 h-4 mr-1" /> Help Guide
-                  </Button>
+                  <a href="https://yashornaments.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="landing-browse-designs-button">
+                    <Navigation className="w-4 h-4" /> Browse Designs
+                  </a>
                 </div>
               </CardContent>
             </Card>

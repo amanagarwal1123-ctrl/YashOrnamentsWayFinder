@@ -10,11 +10,9 @@ import ScanLandingPage from '@/pages/ScanLandingPage';
 import NavigationHub from '@/pages/NavigationHub';
 import RouteSelectionPage from '@/pages/RouteSelectionPage';
 import CheckpointNavPage from '@/pages/CheckpointNavPage';
-import RecoveryPage from '@/pages/RecoveryPage';
 import TreasureMapPage from '@/pages/TreasureMapPage';
 import SchematicMapPage from '@/pages/SchematicMapPage';
 import WhereAmIPage from '@/pages/WhereAmIPage';
-import HelpPage from '@/pages/HelpPage';
 import ArrivalPage from '@/pages/ArrivalPage';
 import LoginPage from '@/pages/LoginPage';
 import AdminDashboard from '@/pages/AdminDashboard';
@@ -45,11 +43,9 @@ function App() {
           <Route path="/hub" element={<NavigationHub />} />
           <Route path="/routes" element={<RouteSelectionPage />} />
           <Route path="/navigate" element={<CheckpointNavPage />} />
-          <Route path="/recovery" element={<RecoveryPage />} />
           <Route path="/map" element={<TreasureMapPage />} />
           <Route path="/schematic" element={<SchematicMapPage />} />
           <Route path="/where-am-i" element={<WhereAmIPage />} />
-          <Route path="/help" element={<HelpPage />} />
           <Route path="/arrived" element={<ArrivalPage />} />
 
           {/* Public Help Guide */}
@@ -83,6 +79,8 @@ function App() {
           <Route path="/admin/tutorial-pdf" element={<Navigate to="/admin/manuals" replace />} />
           <Route path="/gold-rates" element={<Navigate to="/" replace />} />
           <Route path="/gallery" element={<Navigate to="/" replace />} />
+          <Route path="/recovery" element={<Navigate to="/where-am-i" replace />} />
+          <Route path="/help" element={<Navigate to="/" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

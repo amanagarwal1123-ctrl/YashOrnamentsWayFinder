@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getRouteCheckpoints, addSessionEvent, logAssistEvent, updateLocation } from '@/lib/api';
+import { getRouteCheckpoints, addSessionEvent, updateLocation } from '@/lib/api';
 import { BrandHeader, DirectionIcon, BrandingFooter } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
-  ChevronRight, MapPin, HelpCircle, Phone, Share2, AlertTriangle,
-  CheckCircle2, Map, Video, MessageCircle, Locate, Navigation,
-  MoreHorizontal, Compass, Loader2
+  ChevronRight, MapPin, Phone, CheckCircle2, Map, MessageCircle, Locate, Navigation, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowOverlayRenderer } from '@/components/ArrowOverlay';
+
+const CONTACT = '+919958113991';
 
 export default function CheckpointNavPage() {
   const navigate = useNavigate();
@@ -23,7 +22,6 @@ export default function CheckpointNavPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
-  const [showQuickActions, setShowQuickActions] = useState(false);
   const [locationActive, setLocationActive] = useState(false);
   const watchIdRef = useRef(null);
 
@@ -58,7 +56,7 @@ export default function CheckpointNavPage() {
   const progress = checkpoints.length > 0 ? ((currentIdx) / checkpoints.length) * 100 : 0;
 
   const confirmCheckpoint = async () => {
-    if (!cp) return;
+    if (!cp || confirming) return;
     setConfirming(true);
     try {
       await addSessionEvent(session.id, 'checkpoint_confirmed', { order: cp.order, name: cp.name }, cp.id);
@@ -74,79 +72,8 @@ export default function CheckpointNavPage() {
       }
     } catch (e) {
       toast.error('Failed to log progress');
-    } finally {
-      setConfirming(false);
     }
-  };
-
-  const reportCantFind = async () => {
-    if (!cp) return;
-    try {
-      await addSessionEvent(session.id, 'cannot_find', { checkpoint_name: cp.name }, cp.id);
-      toast.info('Help has been notified. You can also call or use recovery mode.');
-    } catch (e) { toast.error('Failed to report'); }
-  };
-
-  const requestHelp = async () => {
-    try {
-      await addSessionEvent(session.id, 'help_requested', { checkpoint_name: cp?.name || '' }, cp?.id || '');
-      toast.success('Help request sent! Our team has been notified.');
-    } catch (e) { toast.error('Failed to send help request'); }
-  };
-
-  const shareLocation = async () => {
-    try {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          await addSessionEvent(session.id, 'location_shared', {
-            lat: pos.coords.latitude, lng: pos.coords.longitude
-          });
-          toast.success('Location shared with helpdesk');
-        }, () => {
-          addSessionEvent(session.id, 'location_shared', {});
-          toast.info('Location shared (approximate)');
-        });
-      } else {
-        await addSessionEvent(session.id, 'location_shared', {});
-        toast.info('Location shared');
-      }
-    } catch (e) { toast.error('Failed to share location'); }
-    setShowQuickActions(false);
-  };
-
-  const handleCall = () => {
-    if (!business?.contact_phone) return;
-    logAssistEvent(session.id, 'phone_call', {}).catch(() => {});
-    window.open(`tel:${business.contact_phone}`, '_self');
-    setShowQuickActions(false);
-  };
-
-  const handleWhatsApp = () => {
-    const waNumber = business?.contact_whatsapp?.replace(/[^0-9]/g, '') || '';
-    if (!waNumber) return;
-    logAssistEvent(session.id, 'whatsapp_chat', {}).catch(() => {});
-    const text = encodeURIComponent(`Hi, I need help navigating. I'm at step ${currentIdx + 1}: ${cp?.name || 'unknown'}. Session: ${session.id?.slice(0,8)}`);
-    window.open(`https://wa.me/${waNumber}?text=${text}`, '_blank');
-    setShowQuickActions(false);
-  };
-
-  const handleWhatsAppVideo = async () => {
-    const waNumber = business?.contact_whatsapp?.replace(/[^0-9]/g, '') || '';
-    if (!waNumber) { toast.error('WhatsApp not available'); return; }
-    try {
-      await logAssistEvent(session.id, 'whatsapp_video_attempted', {
-        checkpoint_name: cp?.name || '', checkpoint_id: cp?.id || ''
-      });
-    } catch (e) { /* best effort */ }
-    // WhatsApp deep link — video call is initiated by the helpdesk agent after this
-    const text = encodeURIComponent(`Hi, I need VIDEO help. Step ${currentIdx + 1}: ${cp?.name || 'unknown'}. Please call me on video. Session: ${session.id?.slice(0,8)}`);
-    window.open(`https://wa.me/${waNumber}?text=${text}`, '_blank');
-    setShowQuickActions(false);
-  };
-
-  const handleRecovery = () => {
-    setShowQuickActions(false);
-    navigate('/recovery');
+    setConfirming(false);
   };
 
   if (loading || !cp) {
@@ -236,7 +163,7 @@ export default function CheckpointNavPage() {
 
                   {cp.what_to_look_for && (
                     <div className="flex items-start gap-2 mb-3">
-                      <AlertTriangle className="w-4 h-4 text-[hsl(var(--warning))] mt-0.5 flex-shrink-0" />
+                      <MapPin className="w-4 h-4 text-[hsl(var(--warning))] mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
                         <span className="font-medium text-[hsl(var(--foreground))]">Look for:</span> {cp.what_to_look_for}
                       </p>
@@ -257,87 +184,34 @@ export default function CheckpointNavPage() {
         <BrandingFooter />
       </div>
 
-      {/* Sticky Quick-Action Bar */}
+      {/* Sticky Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(var(--card))]/95 backdrop-blur-md border-t border-[hsl(var(--border))]">
         <div className="max-w-[480px] mx-auto">
-          {/* Primary quick actions row */}
-          <div className="px-4 pt-2 pb-1 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-            <button
-              onClick={reportCantFind}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition-colors"
-              data-testid="quick-cant-find"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" /> Can't find this
-            </button>
-            <button
-              onClick={handleRecovery}
+          {/* Quick actions */}
+          <div className="px-4 pt-2 pb-1 flex items-center gap-1.5">
+            <a
+              href={`tel:${CONTACT}`}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
-              data-testid="quick-recovery"
+              data-testid="quick-call"
             >
-              <Compass className="w-3.5 h-3.5" /> Where am I?
-            </button>
+              <Phone className="w-3.5 h-3.5" /> Call
+            </a>
+            <a
+              href={`https://wa.me/${CONTACT.replace(/[^0-9]/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors"
+              data-testid="quick-whatsapp"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+            </a>
             <button
-              onClick={requestHelp}
+              onClick={() => navigate('/where-am-i')}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-orange-200 bg-orange-50 text-orange-700 text-xs font-medium hover:bg-orange-100 transition-colors"
-              data-testid="quick-help"
+              data-testid="quick-where-am-i"
             >
-              <HelpCircle className="w-3.5 h-3.5" /> Need Help
+              <Locate className="w-3.5 h-3.5" /> Where Am I?
             </button>
-
-            {/* More Actions Sheet */}
-            <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
-              <SheetTrigger asChild>
-                <button
-                  className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-medium hover:bg-[hsl(var(--muted))] transition-colors"
-                  data-testid="quick-more-actions"
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5" /> More
-                </button>
-              </SheetTrigger>
-              <SheetContent side="bottom" className="rounded-t-2xl">
-                <SheetTitle className="text-base font-semibold mb-4">Quick Actions</SheetTitle>
-                <div className="grid grid-cols-2 gap-3 pb-4">
-                  {business?.contact_phone && (
-                    <button
-                      onClick={handleCall}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[hsl(var(--muted))] hover:bg-[hsl(var(--border))] transition-colors"
-                      data-testid="quick-call"
-                    >
-                      <Phone className="w-6 h-6 text-blue-600" />
-                      <span className="text-xs font-medium">Call Helpdesk</span>
-                    </button>
-                  )}
-                  {business?.contact_whatsapp && (
-                    <>
-                      <button
-                        onClick={handleWhatsApp}
-                        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[hsl(var(--muted))] hover:bg-[hsl(var(--border))] transition-colors"
-                        data-testid="quick-whatsapp"
-                      >
-                        <MessageCircle className="w-6 h-6 text-green-600" />
-                        <span className="text-xs font-medium">WhatsApp Chat</span>
-                      </button>
-                      <button
-                        onClick={handleWhatsAppVideo}
-                        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-green-50 hover:bg-green-100 transition-colors"
-                        data-testid="quick-whatsapp-video"
-                      >
-                        <Video className="w-6 h-6 text-green-700" />
-                        <span className="text-xs font-medium">WhatsApp Video</span>
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={shareLocation}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[hsl(var(--muted))] hover:bg-[hsl(var(--border))] transition-colors"
-                    data-testid="quick-share-location"
-                  >
-                    <Locate className="w-6 h-6 text-[hsl(var(--info))]" />
-                    <span className="text-xs font-medium">Share Location</span>
-                  </button>
-                </div>
-              </SheetContent>
-            </Sheet>
           </div>
 
           {/* Main CTA */}

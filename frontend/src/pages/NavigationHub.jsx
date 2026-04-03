@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/lib/context';
-import { getRoutes, getRoute, getRouteCheckpoints, selectRoute, updateLocationConsent, updateLocation, serveMediaUrl, logAssistEvent } from '@/lib/api';
+import { getRoutes, getRouteCheckpoints, selectRoute, updateLocationConsent, updateLocation, serveMediaUrl } from '@/lib/api';
 import { BrandHeader, BottomActionBar } from '@/components/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,10 +63,7 @@ export default function NavigationHub() {
     try {
       const res = await getRoutes();
       setRoutes(res.data);
-      if (session?.route_id) {
-        const routeRes = await getRoute(session.route_id);
-        setSelectedRoute(routeRes.data);
-      }
+      // Always show all routes — don't auto-select previous route
     } catch (e) {
       toast.error('Failed to load routes');
     } finally {
@@ -229,18 +226,14 @@ export default function NavigationHub() {
             {/* Contact / Support */}
             <Card className="mb-4">
               <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-3">Need Help Before You Start?</h3>
+                <h3 className="text-sm font-semibold mb-3">Need Help?</h3>
                 <div className="flex flex-wrap gap-2">
-                  {business?.contact_phone && (
-                    <a href={`tel:${business.contact_phone}`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="hub-call-button">
-                      <Phone className="w-4 h-4" /> Call
-                    </a>
-                  )}
-                  {business?.contact_whatsapp && (
-                    <a href={`https://wa.me/${business.contact_whatsapp?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="hub-whatsapp-button">
-                      <MessageCircle className="w-4 h-4 text-green-600" /> WhatsApp
-                    </a>
-                  )}
+                  <a href="tel:+919958113991" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="hub-call-button">
+                    <Phone className="w-4 h-4" /> Call
+                  </a>
+                  <a href="https://wa.me/919958113991" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm hover:bg-[hsl(var(--muted))] transition-colors" data-testid="hub-whatsapp-button">
+                    <MessageCircle className="w-4 h-4 text-green-600" /> WhatsApp
+                  </a>
                 </div>
               </CardContent>
             </Card>
